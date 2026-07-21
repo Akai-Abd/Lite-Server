@@ -97,7 +97,7 @@ Create a `config.json` inside the `apps/server` directory to customize your depl
   "dataDir": "./data",
   "logLevel": "info",
   "corsOrigins": ["http://localhost:3001"],
-  "uploadMaxSize": 104857600,
+
   "rateLimitMax": 100,
   "rateLimitWindow": 60000
 }
