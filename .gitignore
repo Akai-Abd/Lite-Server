@@ -5,3 +5,6 @@ dist
 .DS_Store
 coverage
 .turbo
+data/
+apps/server/data/
+apps/data/
