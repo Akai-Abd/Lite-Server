@@ -3,6 +3,8 @@ import cors from '@fastify/cors'
 import rateLimit from '@fastify/rate-limit'
 import multipart from '@fastify/multipart'
 import cookie from '@fastify/cookie'
+import swagger from '@fastify/swagger'
+import swaggerUi from '@fastify/swagger-ui'
 import type { ServerConfig, Session, User } from '@lite-server/shared'
 import * as archiverMod from 'archiver'
 const archiver = (archiverMod as any).default || archiverMod
@@ -60,6 +62,24 @@ export async function createApiServer(deps: ApiServerDependencies): Promise<Fast
     limits: {
       fileSize: config.uploadMaxSize,
     },
+  })
+
+  await server.register(swagger, {
+    swagger: {
+      info: {
+        title: 'Lite-Server API',
+        description: 'API documentation for Lite-Server',
+        version: '1.0.0'
+      }
+    }
+  })
+
+  await server.register(swaggerUi, {
+    routePrefix: '/docs',
+    uiConfig: {
+      docExpansion: 'list',
+      deepLinking: false
+    }
   })
 
   // Authentication middleware
