@@ -264,8 +264,11 @@ export async function createApiServer(deps: ApiServerDependencies): Promise<Fast
         return reply.code(400).send({ success: false, error: { code: 'NO_FILE', message: 'No file uploaded' } })
       }
 
-      const query = request.query as { path?: string }
-      const customPath = query.path ? query.path.replace(/^\/+/, '') : data.filename
+      const query = request.query as { path?: string, pathBase64?: string }
+      let targetPath = data.filename
+      if (query.pathBase64) targetPath = decodeURIComponent(escape(atob(query.pathBase64)))
+      else if (query.path) targetPath = query.path
+      const customPath = targetPath.replace(/^\/+/, '')
       const path = `/uploads/${customPath}`
 
       const writeStream = await vfs.writeStream(path)

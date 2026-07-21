@@ -191,7 +191,8 @@ function App() {
       const targetQuery = currentPath === '/uploads' ? relPath : `${currentPath.replace(/^\/uploads\/?/, '')}/${relPath}`
 
       try {
-        const response = await fetch(`/api/files/upload?path=${encodeURIComponent(targetQuery)}`, {
+        const b64Path = btoa(unescape(encodeURIComponent(targetQuery)))
+        const response = await fetch(`/api/files/upload?pathBase64=${b64Path}`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
           body: formData,
@@ -247,7 +248,8 @@ function App() {
       setFolderUploadStatus(`Uploading file ${i + 1}/${fileArray.length}: ${file.name}`)
 
       try {
-        const response = await fetch(`/api/files/upload?path=${encodeURIComponent(targetQuery)}`, {
+        const b64Path = btoa(unescape(encodeURIComponent(targetQuery)))
+        const response = await fetch(`/api/files/upload?pathBase64=${b64Path}`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
           body: formData,
