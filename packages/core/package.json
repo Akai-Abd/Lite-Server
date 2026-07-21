@@ -1,0 +1,24 @@
+{
+  "name": "@lite-server/core",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@lite-server/shared": "workspace:*",
+    "@lite-server/auth": "workspace:*",
+    "@lite-server/vfs": "workspace:*",
+    "@lite-server/plugins": "workspace:*",
+    "better-sqlite3": "^12.11.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "@types/better-sqlite3": "^7.6.11"
+  }
+}

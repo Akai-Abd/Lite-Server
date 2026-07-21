@@ -1,0 +1,24 @@
+{
+  "name": "@lite-server/server",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc && tsc-alias",
+    "start": "node dist/index.js",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@lite-server/core": "workspace:*",
+    "@lite-server/api": "workspace:*",
+    "@lite-server/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0",
+    "tsc-alias": "^1.8.8",
+    "vitest": "^1.6.0"
+  }
+}

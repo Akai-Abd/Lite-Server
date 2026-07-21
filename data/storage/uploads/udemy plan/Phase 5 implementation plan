@@ -1,0 +1,99 @@
+# Phase 5 — Expiry Validator
+
+This phase introduces a periodic background worker (the **Expiry Validator**) that verifies active Udemy coupon URLs and marks expired or invalid courses as inactive. This keeps the course catalog fresh, prevents coupon fatigue, and ensures dashboard statistics remain accurate.
+
+---
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Cloudflare / Bot Protection Check**: When verifying Udemy courses, requests are made to `udemy.com`. Udemy utilizes Cloudflare protection. If our server gets blocked (403 Forbidden or 429 Too Many Requests), the validator **must not** mark the course as expired. We will treat 403/429 and network errors as "skipped/unknown" states, preserving the course's active status. Only 404 (Not Found) or 200 (OK) with a parsed price > 0 (or a plain paid message) will trigger expiry. **Please confirm if you have any preferred proxy settings or if the default rotated User-Agent is sufficient.**
+
+> [!IMPORTANT]
+> **Verification Batch Size and Frequency**: By default, the validation job will run every **60 minutes** (configurable via `VALIDATE_INTERVAL_MINUTES` on the backend) and process up to **50 courses per run** (ordered by oldest verified first) to distribute network traffic and prevent hitting rate limits. **Please confirm if these default values are appropriate.**
+
+---
+
+## Open Questions
+
+> [!NOTE]
+> **Q1: Behavior for Expired Courses**: Should expired courses remain visible in the dashboard search results (perhaps flagged as "Expired" or under a filter), or should they be completely hidden from the standard course listings? (Currently, the dashboard hides inactive courses by default except in user favorites/history).
+
+---
+
+## Proposed Changes
+
+Changes are organized in order of dependencies: Backend (jobs scheduler) → Scraper Config → Expiry Validator Core → Scraper Job Handler.
+
+---
+
+### Backend (Jobs & Scheduling)
+
+#### [MODIFY] [jobs.service.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/backend/src/jobs/jobs.service.ts)
+- Add registration and cleanup for the `validate-active-courses` repeatable job in `onModuleInit()`:
+  - Read `VALIDATE_INTERVAL_MINUTES` environment variable (defaulting to 60).
+  - Clear any existing `validate-active-courses` repeatable jobs.
+  - Schedule `validate-active-courses` on a repeatable interval.
+
+---
+
+### Scraper (Python Configuration)
+
+#### [MODIFY] [config.py](file:///home/akai/Desktop/Udemy%20Course%20Finder/scraper/src/config.py)
+- Add validation config variables to the `Config` dataclass:
+  - `validate_batch_size: int = 50` (read from `VALIDATE_BATCH_SIZE`, default 50).
+  - `validate_interval_minutes: int = 60` (read from `VALIDATE_INTERVAL_MINUTES`, default 60).
+
+---
+
+### Scraper (Expiry Validator Logic)
+
+#### [NEW] [expiry_validator.py](file:///home/akai/Desktop/Udemy%20Course%20Finder/scraper/src/pipeline/expiry_validator.py)
+Create the validation core logic:
+- `validate_active_courses(db: Database, http: HttpClient, batch_size: int)` function:
+  1. Query active courses: `SELECT id, title, udemy_url, coupon_url, udemy_course_id FROM courses WHERE is_active = true ORDER BY last_verified_at ASC LIMIT %s`
+  2. For each course, fetch its page (following redirects if necessary):
+     - Log details of the check.
+     - Catch network errors or specific status codes (e.g. 403, 429) → update `last_verified_at = NOW()` but keep `is_active = true` (log as skipped).
+     - If `404` Not Found → mark expired (`is_active = false`, `expires_at = NOW()`).
+     - If `200` OK, parse HTML:
+       - Check Twitter metadata: `<meta name="twitter:label2" content="Price" />` and check if `twitter:data2` is NOT `"Free"`.
+       - Check Schema JSON-LD: `<script type="application/ld+json">`, search for `Offer` schema, check if `price` > `"0.00"`.
+       - Check OpenGraph metadata: `<meta property="og:price:amount" content="..." />` and verify if it's > `0.00`.
+       - If any of these checks indicate the course is no longer free, mark expired (`is_active = false`, `expires_at = NOW()`).
+  3. Execute batch database updates:
+     - For active/skipped courses: update `last_verified_at = NOW()`.
+     - For expired courses: update `is_active = false`, `expires_at = NOW()`, `last_verified_at = NOW()`.
+
+---
+
+### Scraper (Job Processing)
+
+#### [MODIFY] [main.py](file:///home/akai/Desktop/Udemy%20Course%20Finder/scraper/src/main.py)
+- Import `validate_active_courses` from `src.pipeline.expiry_validator`.
+- Update `_handle_job()` to match the `validate-active-courses` job name.
+- Implement the `_validate_active_courses()` handler:
+  - Create a temporary `HttpClient` instance for the validation batch (or reuse a persistent one).
+  - Call the validation pipeline.
+  - Return a dictionary summarizing the results (courses checked, active, expired, failed/skipped).
+
+---
+
+## Verification Plan
+
+### Automated Tests
+- Run backend unit tests to verify jobs scheduling logic doesn't break:
+  ```bash
+  cd backend && npm run test
+  ```
+- Write unit tests for the Python validator logic in `scraper/tests/test_expiry_validator.py` to test parsing logic on mock HTML fixtures (both free and paid examples).
+  ```bash
+  cd scraper && python -m pytest tests/test_expiry_validator.py -v
+  ```
+
+### Manual Verification
+1. **Mock Database Update**: Insert/seed a test course with a coupon code that is known to be expired (or a random inactive code).
+2. **Trigger Job**: Trigger the validation job using a script or by calling NestJS BullMQ queue manager.
+3. **Verify DB State**: Check database to confirm the mock course's `is_active` has flipped to `false`, `expires_at` is set, and other courses remain active.
+4. **Log Inspection**: Verify the console/Pino logs correctly output validation statistics.
+

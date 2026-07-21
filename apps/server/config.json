@@ -1,0 +1,14 @@
+{
+  "host": "0.0.0.0",
+  "port": 3000,
+  "dataDir": "./data",
+  "logLevel": "info",
+  "corsOrigins": ["http://localhost:3001"],
+  "sessionMaxAge": 86400,
+  "uploadChunkSize": 5242880,
+  "uploadMaxSize": 104857600,
+  "maxConcurrentUploads": 10,
+  "rateLimitMax": 1000,
+  "rateLimitWindow": 60000,
+  "tlsEnabled": false
+}

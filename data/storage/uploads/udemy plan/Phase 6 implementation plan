@@ -1,0 +1,147 @@
+# Phase 6 — Semantic Search & Scraper Proxies
+
+This phase introduces **Semantic Search** and **Similar Course Recommendations** using PostgreSQL's `pgvector` extension and local embeddings, alongside a **Proxy Configuration Manager** to protect scrapers and the expiry validator from Cloudflare blocks and rate limits.
+
+---
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Database Image Upgrade**: To support vector databases, we must upgrade the PostgreSQL image in `docker-compose.yml` from `postgres:16-alpine` to `pgvector/pgvector:16-pgvector`. If you have existing local volumes, docker will restart with the new image seamlessly, but we will run `CREATE EXTENSION IF NOT EXISTS vector;` in a Prisma migration to initialize pgvector.
+> **Please confirm if you have any constraints on changing the database container image.**
+
+> [!IMPORTANT]
+> **Local Embedding Generation**: We will use `@huggingface/transformers` in the NestJS backend to run the lightweight **`Xenova/all-MiniLM-L6-v2`** model (~90MB model file) locally on CPU. This converts course metadata and user search queries into 384-dimensional vectors. Embedding generation will run asynchronously in a background queue so it does not block course storage.
+> **Please confirm if you prefer this local approach or if you'd like to support optional OpenAI/Gemini API configurations in `.env`.**
+
+---
+
+## Open Questions
+
+> [!NOTE]
+> **Q1: Proxy Format Verification**: When a user inputs a proxy list in the settings page, should the backend test them against `udemy.com` or `google.com` before saving, or is simple format validation (`http://user:pass@host:port`) sufficient? Propose testing them asynchronously and displaying a "Valid / Failed" badge.
+
+---
+
+## Proposed Changes
+
+### Docker Infrastructure
+
+#### [MODIFY] [docker-compose.yml](file:///home/akai/Desktop/Udemy%20Course%20Finder/docker-compose.yml)
+- Change the PostgreSQL image from `postgres:16-alpine` to `pgvector/pgvector:16-pgvector` to enable vector operations.
+
+---
+
+### Database & Schema
+
+#### [MODIFY] [schema.prisma](file:///home/akai/Desktop/Udemy%20Course%20Finder/backend/prisma/schema.prisma)
+- Add `postgresqlExtensions` to the `previewFeatures` list:
+  ```prisma
+  generator client {
+    provider        = "prisma-client-js"
+    previewFeatures = ["postgresqlExtensions"]
+  }
+  ```
+- Add the `pgvector` extension to the datasource block:
+  ```prisma
+  datasource db {
+    provider   = "postgresql"
+    url        = env("DATABASE_URL")
+    extensions = [pgvector]
+  }
+  ```
+- Add the `CourseEmbedding` model (using the standard 384 dimensions of the `MiniLM` model):
+  ```prisma
+  model CourseEmbedding {
+    courseId  String                    @id @map("course_id")
+    embedding Unsupported("vector(384)")
+    course    Course                    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+    @@map("course_embeddings")
+  }
+  ```
+
+---
+
+### Backend (NestJS API & Embeddings Service)
+
+#### [NEW] `backend/src/common/services/embeddings.service.ts`
+- Install `@huggingface/transformers` (and `onnxruntime-node`).
+- Implement `EmbeddingsService` with:
+  - `onModuleInit()`: Pre-load the pipeline (`feature-extraction` with `Xenova/all-MiniLM-L6-v2` using ONNX CPU).
+  - `generateEmbedding(text: string): Promise<number[]>`: Generate a normalized 384-float vector.
+
+#### [NEW] `backend/src/courses/embeddings-scheduler.service.ts`
+- Create a repeatable NestJS background task or BullMQ worker (`process-missing-embeddings`) that:
+  - Queries courses missing a `CourseEmbedding`.
+  - Concatenates the title and description: `"${course.title} ${course.description || ''}"`.
+  - Generates the vector embedding and inserts it into the `course_embeddings` table.
+
+#### [MODIFY] [courses.service.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/backend/src/courses/courses.service.ts)
+- Add a `semanticSearch(queryText: string, limit: number)` method:
+  1. Generate vector embedding for the search query using `EmbeddingsService`.
+  2. Query database using `$queryRaw` with cosine similarity:
+     ```sql
+     SELECT c.*, 1 - (ce.embedding <=> $1::vector) as similarity
+     FROM courses c
+     JOIN course_embeddings ce ON c.id = ce.course_id
+     WHERE c.is_active = true
+     ORDER BY ce.embedding <=> $1::vector ASC
+     LIMIT $2
+     ```
+- Add a `getSimilarCourses(courseId: string, limit: number)` method:
+  1. Find the target course's vector.
+  2. Run `$queryRaw` to select courses sorted by similarity to that vector, excluding the current course.
+
+#### [MODIFY] [courses.controller.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/backend/src/courses/courses.controller.ts)
+- Expose `GET /courses/search/semantic?q=...` endpoint.
+- Expose `GET /courses/:id/similar` endpoint.
+
+---
+
+### Scraper Engine (Python Proxy Rotation)
+
+#### [MODIFY] [http_client.py](file:///home/akai/Desktop/Udemy%20Course%20Finder/scraper/src/utils/http_client.py)
+- Modify `HttpClient` class:
+  - On initialization or request lifecycle, check the PostgreSQL `settings` table for the `proxies` key (e.g. `SELECT value FROM settings WHERE key = 'proxies'`).
+  - Parse the line-delimited list of proxy URLs (`http://[user:pass@]host:port`).
+  - Maintain a dynamic proxy list. If a proxy fails continuously (e.g. timeout or status 407), rotate to the next proxy or pick randomly.
+  - Apply the proxy configuration in the `requests.Session` request handler:
+    ```python
+    proxies = {"http": selected_proxy, "https": selected_proxy}
+    ```
+
+---
+
+### Frontend Dashboard UI
+
+#### [MODIFY] `frontend/src/app/(dashboard)/settings/page.tsx`
+- Add a **Scraper Proxies** configuration card.
+- Textarea to insert proxies (one per line).
+- Add a "Test Proxies" button that pings the backend to check their latency/reachability to Udemy.
+- Add a "Save Proxy List" button.
+
+#### [MODIFY] `frontend/src/app/(dashboard)/courses/page.tsx`
+- Add a custom switch or toggle in the search header: **"Semantic AI Search"**.
+- If toggled, search queries invoke the semantic search API instead of regular keyword-based search.
+
+#### [MODIFY] `frontend/src/components/courses/course-card.tsx` (or Course Details Modal)
+- Show a **"Similar/Related Courses"** section at the bottom of the course modal.
+- Render 3-4 cards representing semantically similar courses.
+
+---
+
+## Verification Plan
+
+### Automated Tests
+- Run database migrations: `npx prisma migrate dev`
+- Write unit tests for `EmbeddingsService` to ensure text yields a 384-length float array.
+- Write E2E/integration tests for `GET /courses/search/semantic` and `GET /courses/:id/similar`.
+- Test python scraper settings loader and proxy parsing logic using mocked DB settings responses.
+
+### Manual Verification
+1. **Docker Compose Rebuild**: Run `docker compose up -d` to upgrade the Postgres container to pgvector.
+2. **Seed & Embed**: Inject test courses, verify the background runner generates and inserts vector embeddings in `course_embeddings`.
+3. **Semantic Search Test**: Search for *"Frontend Web framework"* and verify it fetches courses containing React, Vue, or Angular, even if they do not contain the word "Frontend".
+4. **Proxy Test**: Input a free public proxy (or test proxy) in Settings, trigger a manual scrape, and verify the logs show the request going through the proxy address.
+

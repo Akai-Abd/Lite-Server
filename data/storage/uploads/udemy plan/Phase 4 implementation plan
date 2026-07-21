@@ -1,0 +1,495 @@
+# Phase 4 — Analytics, Security Hardening, Full Test Coverage, Polish & Documentation
+
+Final phase of the Udemy Course Finder. Upgrade the analytics page with interactive time-series charts, harden the security posture (rate limiting refinements, token blacklisting via Redis, CORS review, structured logging), achieve comprehensive test coverage across all three services (backend, frontend, scraper), and produce final documentation.
+
+---
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Analytics Time-Series Charts**: The ARU (Section 4.9) specifies *"courses added over time, per-source yield"*. I will add a **Recharts**-based time-series line chart to the Analytics page showing courses added per day (last 30 days) and a stacked area chart of per-provider yield over time. This requires a new backend endpoint `GET /analytics/time-series` that aggregates `courses.createdAt` by day. **Please confirm this scope and the 30-day default window.**
+
+> [!IMPORTANT]
+> **Redis Token Blacklisting**: The current `logout()` is a no-op (line 59 of [auth.service.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/backend/src/auth/auth.service.ts) says *"Full token blacklisting will use Redis in Phase 4"*). I will implement a Redis-backed blacklist so that on logout, the JWT's `jti` is stored in Redis with a TTL matching the token's remaining lifetime. The `JwtAuthGuard` will check this blacklist on every request. **Please confirm this approach.**
+
+> [!IMPORTANT]
+> **Rate Limiting Tiers**: Currently the `ThrottlerModule` is configured globally with a single rule (`100 req / 60s`). The ARU (Section 14) specifies *"rate limiting applied to auth endpoints"* specifically. I will add a stricter rate limit on auth endpoints (`5 req / 60s` for `/auth/login`) via a `@Throttle()` decorator override, while keeping the global limit for all other routes. **Please confirm these thresholds.**
+
+> [!WARNING]
+> **Test Scope**: There are currently **zero backend unit tests** (`src/**/*.spec.ts` — none exist) and the scraper has 2 test files covering pipeline stages and URL parsing. Phase 4 will add unit tests for all backend services, repositories, controllers, DTOs, and guards. E2E tests will cover full API flows (login → CRUD → logout). Frontend tests are excluded from this phase since no testing framework (Jest/Vitest) is configured in the frontend `package.json`. **Please confirm if frontend tests should be included (this would require additional setup).**
+
+> [!WARNING]
+> **Structured Logging**: The backend currently uses NestJS's built-in `Logger` across all services. I will add `nestjs-pino` (Pino-based structured JSON logging) so logs are machine-parseable when running in Docker, with human-readable pretty-print in development. This changes log output format. **Please confirm this addition.**
+
+---
+
+## Open Questions
+
+> [!IMPORTANT]
+> **Q1 — Analytics Date Range**: Should the time-series analytics support configurable date ranges (7d / 14d / 30d / 90d / All time) via a dropdown, or is a fixed 30-day window sufficient for Phase 4?
+
+> [!IMPORTANT]
+> **Q2 — Password Change Endpoint**: The Phase 3 Settings page mentions a password change form, but no `PATCH /auth/password` endpoint exists on the backend. Should Phase 4 add this endpoint (hashed password update with current-password verification), or was it deferred intentionally?
+
+> [!IMPORTANT]
+> **Q3 — Redis Cache Layer**: The ARU (Section 7) specifies *"Redis caches expensive/frequent reads (dashboard stats, search results) with sensible TTLs, invalidated on new scrape ingestion."* Currently, Redis is only used for BullMQ. Should Phase 4 add Redis caching for `GET /courses/stats`, `GET /analytics/overview`, and `GET /courses/search` results, or defer to a future optimization pass?
+
+> [!IMPORTANT]
+> **Q4 — History Clear Endpoint**: The Phase 3 History page has a "Clear History" button, but there's no `DELETE /history` endpoint on the backend. Should Phase 4 add `DELETE /history` (clear all history for the authenticated user)?
+
+---
+
+## Proposed Changes
+
+Changes are organized by component in dependency order: Backend security → Backend analytics → Backend tests → Scraper tests → Frontend analytics → Frontend polish → Documentation.
+
+---
+
+### 4A: Backend — Security Hardening
+
+#### Structured Logging
+
+##### [NEW] `backend/src/common/logger/` module
+- `logger.module.ts` — Global module that configures `nestjs-pino` with Pino
+- In **development** (`NODE_ENV=development`): human-readable pretty-printed logs
+- In **production/docker** (`NODE_ENV=production`): structured JSON output
+- Auto-log request/response with correlation IDs
+- Replace manual `Logger` usage across services with injection-based `PinoLogger`
+
+##### [MODIFY] [app.module.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/backend/src/app.module.ts)
+- Import `LoggerModule` and register globally
+- Add `bufferLogs: true` to `NestFactory.create()` in `main.ts` for Pino compatibility
+
+##### [MODIFY] [main.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/backend/src/main.ts)
+- Switch to `app.useLogger(app.get(Logger))` for Pino integration
+- Add `bufferLogs: true` option
+
+---
+
+#### Redis Token Blacklisting
+
+##### [NEW] `backend/src/auth/token-blacklist.service.ts`
+- `TokenBlacklistService` — wraps Redis `SET`/`GET` operations
+- `blacklist(jti: string, ttlSeconds: number)` — stores the JTI with an expiry TTL
+- `isBlacklisted(jti: string): Promise<boolean>` — checks if the JTI exists in Redis
+- Uses `ioredis` client (already installed)
+
+##### [MODIFY] [auth.service.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/backend/src/auth/auth.service.ts)
+- Add `jti` (UUID) to JWT payload in `generateTokens()`
+- Update `logout()` to accept the current token, decode the `jti` and `exp`, and call `TokenBlacklistService.blacklist(jti, remainingTTL)`
+- Return the blacklisted JTI confirmation
+
+##### [MODIFY] [jwt-auth.guard.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/backend/src/common/guards/jwt-auth.guard.ts)
+- Inject `TokenBlacklistService` 
+- After passport validates the JWT, check `isBlacklisted(payload.jti)` — if blacklisted, throw `UnauthorizedException`
+
+##### [MODIFY] [auth.controller.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/backend/src/auth/auth.controller.ts)
+- Update `logout()` to extract the bearer token from the request header and pass it to the service
+
+---
+
+#### Rate Limiting Refinement
+
+##### [MODIFY] [auth.controller.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/backend/src/auth/auth.controller.ts)
+- Add `@Throttle({ default: { limit: 5, ttl: 60000 } })` to the `login()` endpoint — stricter brute-force protection
+- Add `@Throttle({ default: { limit: 3, ttl: 60000 } })` to the `refresh()` endpoint
+
+##### [MODIFY] [providers.controller.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/backend/src/providers/providers.controller.ts)
+- Add `@Throttle({ default: { limit: 10, ttl: 60000 } })` to `triggerScrape()` and `retry()` to prevent abuse of expensive operations
+
+---
+
+#### Password Change Endpoint (if approved per Q2)
+
+##### [MODIFY] [auth.service.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/backend/src/auth/auth.service.ts)
+- Add `changePassword(userId: string, currentPassword: string, newPassword: string)` method
+- Verify current password with `argon2.verify()`, hash new password with `argon2.hash()`
+- Update via `UsersRepository`
+
+##### [NEW] `backend/src/auth/dto/change-password.dto.ts`
+- `currentPassword: string` (required)
+- `newPassword: string` (required, min length 8, complexity validation)
+
+##### [MODIFY] [auth.controller.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/backend/src/auth/auth.controller.ts)
+- Add `PATCH /auth/password` endpoint, protected, uses `@CurrentUser('id')` to identify the user
+
+##### [MODIFY] [users.repository.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/backend/src/users/users.repository.ts)
+- Add `updatePassword(userId: string, passwordHash: string)` method
+
+---
+
+#### History Clear Endpoint (if approved per Q4)
+
+##### [MODIFY] [history.service.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/backend/src/history/history.service.ts)
+- Add `clearHistory(userId: string)` method
+
+##### [MODIFY] [history.repository.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/backend/src/history/history.repository.ts)
+- Add `deleteAllByUser(userId: string)` method using `prisma.history.deleteMany()`
+
+##### [MODIFY] [history.controller.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/backend/src/history/history.controller.ts)
+- Add `DELETE /history` endpoint, protected, uses `@CurrentUser('id')`
+
+---
+
+#### Redis Cache Layer (if approved per Q3)
+
+##### [NEW] `backend/src/common/cache/redis-cache.service.ts`
+- Generic cache wrapper: `get<T>(key)`, `set(key, value, ttlSeconds)`, `invalidate(key)`, `invalidatePattern(pattern)`
+- Uses `ioredis` client
+
+##### [NEW] `backend/src/common/cache/redis-cache.module.ts`
+- Global module that provides `RedisCacheService`
+
+##### [MODIFY] [courses.service.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/backend/src/courses/courses.service.ts)
+- Cache `getDashboardStats()` result with key `dashboard:stats`, TTL 60s
+- Invalidate on scrape completion (via an event or direct call)
+
+##### [MODIFY] [analytics.service.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/backend/src/analytics/analytics.service.ts)
+- Cache `getOverview()` result with key `analytics:overview`, TTL 120s
+
+---
+
+### 4B: Backend — Analytics Time-Series
+
+#### [MODIFY] [analytics.service.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/backend/src/analytics/analytics.service.ts)
+- Add `getTimeSeries(days: number = 30)` method
+- Returns:
+  - `coursesPerDay: { date: string, count: number }[]` — aggregated from `courses.createdAt` grouped by `DATE_TRUNC('day', created_at)` using Prisma raw query
+  - `coursesByProviderPerDay: { date: string, provider: string, count: number }[]` — grouped by day + provider
+  - `scrapingRunsPerDay: { date: string, success: number, failed: number }[]` — from logs table
+- Uses `prisma.$queryRaw` for efficient date-based aggregation
+
+#### [MODIFY] [analytics.controller.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/backend/src/analytics/analytics.controller.ts)
+- Add `GET /analytics/time-series?days=30` endpoint
+- Validate `days` param (min 7, max 365, default 30)
+
+#### [NEW] `backend/src/analytics/dto/time-series-query.dto.ts`
+- `days?: number` with `@IsOptional()`, `@IsInt()`, `@Min(7)`, `@Max(365)`
+
+---
+
+### 4C: Backend — Unit Tests
+
+All tests use Jest with mocked Prisma (`@prisma/client`) and mocked dependencies.
+
+#### [NEW] `backend/src/auth/auth.service.spec.ts`
+- Test `login()` — valid credentials, invalid email, wrong password
+- Test `refreshTokens()` — valid user, user not found
+- Test `logout()` — token blacklisted in Redis
+- Test `generateTokens()` — correct payload structure, JTI present
+- Test `changePassword()` — valid flow, wrong current password
+
+#### [NEW] `backend/src/auth/auth.controller.spec.ts`
+- Test endpoint routing and DTO validation
+- Test rate limiting decorators are applied
+
+#### [NEW] `backend/src/courses/courses.service.spec.ts`
+- Test `findAll()` — delegates to repository with correct params
+- Test `findById()` — found / not found (throws `NotFoundException`)
+- Test `search()` — delegates correctly
+- Test `getDashboardStats()` — returns aggregated stats
+
+#### [NEW] `backend/src/courses/courses.repository.spec.ts`
+- Test `findAll()` — builds correct Prisma query with filters, pagination, sorting
+- Test `search()` — builds correct `OR` clause for text search
+- Test `countActive()` — correct where clause
+- Test `countExpiringSoon()` — correct date threshold
+- Test `buildExpiryFilter()` — all branches (active, expired, default)
+- Test `buildSortOrder()` — all enum values
+
+#### [NEW] `backend/src/providers/providers.service.spec.ts`
+- Test `findAll()`, `findById()` (found/not found)
+- Test `update()` — delegates correctly
+- Test `triggerScrape()` — with and without provider ID
+- Test `testProvider()` — enqueues test job
+- Test `retryProvider()` — no logs, last log not failed, retry success, retry fallback
+
+#### [NEW] `backend/src/providers/providers.repository.spec.ts`
+- Test `findAll()`, `findById()`, `update()`
+- Test `findLogs()` — pagination
+- Test `getStats()` — aggregation result mapping
+- Test `countEnabled()`
+
+#### [NEW] `backend/src/favorites/favorites.service.spec.ts`
+- Test `findByUser()`, `addFavorite()`, `removeFavorite()`, `isFavorite()`
+
+#### [NEW] `backend/src/history/history.service.spec.ts`
+- Test `findByUser()`, `recordAction()`, `clearHistory()`
+
+#### [NEW] `backend/src/analytics/analytics.service.spec.ts`
+- Test `getOverview()` — correct aggregation
+- Test `getCoursesByCategory()` — mapping with category names
+- Test `getCoursesByProvider()` — mapping with provider names
+- Test `getTimeSeries()` — date range calculation, raw query parameters
+
+#### [NEW] `backend/src/users/users.service.spec.ts`
+- Test `findByEmail()`, `findById()`
+
+#### [NEW] `backend/src/jobs/jobs.service.spec.ts`
+- Test `enqueueScrapeJob()` — single and all providers
+- Test `enqueueTestJob()`
+- Test `getJobStatus()` — found / not found
+- Test `retryJob()` — found/not found, correct state check
+
+#### [NEW] `backend/src/common/guards/jwt-auth.guard.spec.ts`
+- Test public routes bypass auth
+- Test blacklisted tokens are rejected
+- Test missing token throws UnauthorizedException
+
+#### [NEW] `backend/src/common/filters/global-exception.filter.spec.ts`
+- Test HttpException formatting
+- Test unknown exception handling with 500 status
+
+---
+
+### 4D: Backend — E2E Tests
+
+#### [NEW] `backend/test/auth.e2e-spec.ts`
+- Full auth flow: login → receive tokens → access protected route → refresh → logout → verify blacklisted token rejected
+
+#### [NEW] `backend/test/courses.e2e-spec.ts`
+- List courses with pagination → search → get by ID → get stats
+- Filter by category, provider, expiry status
+
+#### [NEW] `backend/test/favorites.e2e-spec.ts`
+- Login → add favorite → list favorites → remove favorite
+
+#### [NEW] `backend/test/history.e2e-spec.ts`
+- Login → record history → list history → clear history
+
+#### [NEW] `backend/test/providers.e2e-spec.ts`
+- List providers → update (enable/disable) → get logs → get stats
+
+#### [NEW] `backend/test/app.e2e-spec.ts`
+- Health check / app bootstrap test
+- Swagger endpoint accessible
+- Unauthenticated requests return 401
+
+---
+
+### 4E: Scraper — Extended Test Coverage
+
+#### [NEW] `scraper/tests/test_providers.py`
+- Per-provider parser tests using fixture HTML files
+- For each of the 9 providers: load a saved HTML fixture, run the `scrape()` method with mocked HTTP responses, assert correct course extraction (title, URL, coupon code, category)
+- Test error handling: malformed HTML, empty pages, HTTP errors
+
+#### [NEW] `scraper/tests/fixtures/` — HTML fixture files
+- One sample HTML file per provider (9 files):
+  - `real_discount_sample.html`
+  - `courson_sample.html`
+  - `tutorial_bar_sample.html`
+  - `enext_sample.html`
+  - `idownloadcoupons_sample.html`
+  - `discudemy_sample.html`
+  - `udemy_freebies_sample.html`
+  - `course_joiner_sample.html`
+  - `course_vania_sample.html`
+
+#### [NEW] `scraper/tests/test_store.py`
+- Test `store_courses()` with mocked database connection
+- Test upsert logic (new course vs. update existing)
+- Test provider status update on completion
+
+#### [NEW] `scraper/tests/test_language_filter.py` (extend existing coverage)
+- Test language detection fallback (no explicit language → title-based detection)
+- Test mixed batch (some English, some non-English)
+- Test edge cases: language variations ("en-US", "eng", "English (Auto-generated)")
+
+---
+
+### 4F: Frontend — Analytics Page Upgrade
+
+#### Install Recharts
+
+Add `recharts` package for interactive charting.
+
+#### [MODIFY] [analytics/page.tsx](file:///home/akai/Desktop/Udemy%20Course%20Finder/frontend/src/app/%28dashboard%29/analytics/page.tsx)
+- Add **Courses Over Time** time-series chart (Recharts `AreaChart` with gradient fill)
+  - Date range selector dropdown: 7d / 14d / 30d / 90d
+  - Smooth area with grid lines and custom tooltip
+- Add **Provider Yield Over Time** stacked area chart
+  - Each provider as a differently-colored area
+  - Toggle providers on/off via legend
+- Add **Scraping Success Rate Over Time** line chart
+  - Dual-axis: success count + failure count as bars, success rate as line
+- Keep existing overview cards and category/provider breakdowns
+- Add animated number counters on overview cards (count-up effect on load)
+- Add proper date formatting (e.g., "Jul 3", "Jun 28")
+
+#### [NEW] `frontend/src/components/analytics/time-series-chart.tsx`
+- Reusable time-series chart component wrapping Recharts
+- Props: `data`, `dataKeys`, `title`, `colors`, `type` (area/line/bar)
+- Responsive container, custom tooltips, animated entry
+
+#### [NEW] `frontend/src/components/analytics/date-range-selector.tsx`
+- Dropdown selector for time range: 7d / 14d / 30d / 90d
+- Emits selected range as `days: number`
+
+#### [MODIFY] [api-client.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/frontend/src/lib/api-client.ts)
+- Add `AnalyticsTimeSeries` response type
+- Add `analyticsApi.getTimeSeries(days: number)` function
+
+#### [MODIFY] [use-analytics.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/frontend/src/lib/hooks/use-analytics.ts)
+- Add `useAnalyticsTimeSeries(days: number)` hook with TanStack Query
+- `staleTime: 5 * 60 * 1000` (5 minutes — analytics data doesn't change fast)
+
+---
+
+### 4G: Frontend — Final Polish
+
+#### [MODIFY] [settings/page.tsx](file:///home/akai/Desktop/Udemy%20Course%20Finder/frontend/src/app/%28dashboard%29/settings/page.tsx)
+- Add **Password Change** form (if backend endpoint approved per Q2):
+  - Current password, new password, confirm password fields
+  - Validation: passwords match, min 8 chars
+  - Calls `PATCH /auth/password`
+  - Toast feedback on success/error
+
+#### [MODIFY] [globals.css](file:///home/akai/Desktop/Udemy%20Course%20Finder/frontend/src/app/globals.css)
+- Add Recharts tooltip/legend custom styles to match the app's design system
+- Add count-up animation keyframes
+
+#### [MODIFY] [history/page.tsx](file:///home/akai/Desktop/Udemy%20Course%20Finder/frontend/src/app/%28dashboard%29/history/page.tsx)
+- Wire "Clear History" button to `DELETE /history` endpoint (if approved per Q4)
+
+---
+
+### 4H: Documentation
+
+#### [NEW] `README.md` (project root)
+- **Project overview** — what it does, the 9 sources, tech stack
+- **Quick start** — `cp .env.example .env && docker compose up -d`
+- **Architecture diagram** (Mermaid)
+- **Development setup** — prerequisites, running locally without Docker
+- **API reference** — link to Swagger at `http://localhost:4000/api`
+- **Environment variables** — table of all `.env` vars with descriptions
+- **Testing** — how to run backend, scraper, and E2E tests
+- **Project structure** — directory tree with component explanations
+- **Roadmap / Changelog** — phases completed
+
+#### [NEW] `backend/README.md`
+- NestJS backend setup, module architecture, running tests, Prisma commands
+
+#### [NEW] `scraper/README.md`
+- Python scraper setup, provider architecture, running tests, adding new providers
+
+#### [NEW] `frontend/README.md`
+- Next.js frontend setup, component structure, hooks, styling approach
+
+#### [MODIFY] [.env.example](file:///home/akai/Desktop/Udemy%20Course%20Finder/.env.example)
+- Add inline documentation for each variable
+- Add recommended production values
+
+---
+
+## Verification Plan
+
+### Automated Tests
+
+```bash
+# Backend unit tests
+cd backend && npm run test
+
+# Backend unit tests with coverage
+cd backend && npm run test:cov
+
+# Backend E2E tests (requires test database)
+cd backend && npm run test:e2e
+
+# Scraper tests
+cd scraper && python -m pytest tests/ -v
+
+# Frontend type check and lint
+cd frontend && npx tsc --noEmit && npm run lint
+```
+
+### Manual Verification
+
+1. **Analytics Time-Series**: Charts render with real or seed data. Date range selector updates the charts. Tooltips show correct data on hover. Charts are responsive.
+2. **Token Blacklisting**: Login → grab token → logout → use old token → get 401 rejected. Verify blacklist entry expires after token TTL.
+3. **Rate Limiting**: Hit `/auth/login` 6+ times rapidly → verify 429 Too Many Requests on the 6th attempt. Verify global limit still allows 100 req/min for normal endpoints.
+4. **Password Change**: Change password → verify can't login with old password → verify can login with new password.
+5. **History Clear**: Record some history → clear → verify empty history list.
+6. **Structured Logging**: Run in dev mode → verify pretty-printed logs. Run in Docker → verify JSON-structured logs with request correlation IDs.
+7. **Redis Cache**: Verify dashboard stats and analytics overview return cached data (check response times). Verify cache invalidation after a scrape completes.
+8. **Test Coverage**: `npm run test:cov` reports ≥80% line coverage on all service/repository files.
+9. **Documentation**: README renders correctly in GitHub/Gitea. Quick start instructions work from a clean clone.
+
+### Checklist
+
+- [ ] `nestjs-pino` structured logging integrated
+- [ ] Redis token blacklisting works on logout
+- [ ] `JwtAuthGuard` rejects blacklisted tokens
+- [ ] Auth rate limits enforced (5 req/min login, 3 req/min refresh)
+- [ ] Provider action rate limits enforced (10 req/min scrape/retry)
+- [ ] Password change endpoint works (if approved)
+- [ ] History clear endpoint works (if approved)
+- [ ] Redis cache layer works for stats/analytics (if approved)
+- [ ] `GET /analytics/time-series` returns correct date-aggregated data
+- [ ] Analytics page shows time-series charts with Recharts
+- [ ] Date range selector works (7d / 14d / 30d / 90d)
+- [ ] Backend unit tests: auth service, courses service/repo, providers service/repo, favorites, history, analytics, users, jobs, guards, filters
+- [ ] Backend E2E tests: auth flow, courses CRUD, favorites, history, providers
+- [ ] Scraper provider fixture tests (9 providers)
+- [ ] Scraper store and extended filter tests
+- [ ] ≥80% backend test coverage
+- [ ] Root README with quick start, architecture, API reference
+- [ ] Per-service READMEs (backend, frontend, scraper)
+- [ ] `.env.example` documented
+- [ ] All services build and start correctly in Docker
+
+---
+
+## Execution Order
+
+```mermaid
+graph TD
+    A["4A: Security Hardening"] --> A1["Structured logging (nestjs-pino)"]
+    A1 --> A2["Redis token blacklisting service"]
+    A2 --> A3["JwtAuthGuard blacklist check"]
+    A3 --> A4["Rate limiting tiers (auth, providers)"]
+    A4 --> A5["Password change endpoint"]
+    A5 --> A6["History clear endpoint"]
+    A6 --> A7["Redis cache layer"]
+
+    A7 --> B["4B: Analytics Time-Series"]
+    B --> B1["Backend: time-series aggregation queries"]
+    B1 --> B2["Backend: GET /analytics/time-series endpoint"]
+
+    B2 --> C["4C: Backend Unit Tests"]
+    C --> C1["Auth service/controller tests"]
+    C1 --> C2["Courses service/repository tests"]
+    C2 --> C3["Providers service/repository tests"]
+    C3 --> C4["Favorites, History, Users, Analytics tests"]
+    C4 --> C5["Jobs service, Guards, Filters tests"]
+
+    C5 --> D["4D: Backend E2E Tests"]
+    D --> D1["Auth e2e flow"]
+    D1 --> D2["Courses, Favorites, History e2e"]
+    D2 --> D3["Providers, App e2e"]
+
+    D3 --> E["4E: Scraper Extended Tests"]
+    E --> E1["Create HTML fixtures (9 providers)"]
+    E1 --> E2["Provider parser fixture tests"]
+    E2 --> E3["Store + language filter extended tests"]
+
+    E3 --> F["4F: Frontend Analytics"]
+    F --> F1["Install recharts + time-series API hook"]
+    F1 --> F2["TimeSeriesChart component"]
+    F2 --> F3["DateRangeSelector component"]
+    F3 --> F4["Analytics page upgrade with charts"]
+
+    F4 --> G["4G: Frontend Polish"]
+    G --> G1["Settings password change form"]
+    G1 --> G2["History clear button wiring"]
+    G2 --> G3["CSS polish for charts"]
+
+    G3 --> H["4H: Documentation"]
+    H --> H1["Root README"]
+    H1 --> H2["Per-service READMEs"]
+    H2 --> H3[".env.example documentation"]
+    H3 --> H4["Final verification + Docker test"]
+```
+
+> This plan covers **Phase 4** — the final phase of the Udemy Course Finder project. After Phase 4 is verified, the application meets all success criteria defined in ARU Section 18.
+

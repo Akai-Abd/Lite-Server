@@ -1,0 +1,138 @@
+docker buildx history rm --all
+
+Viewed docker-compose.yml:1-146
+
+Here is a handy cheat sheet of the most common Docker commands you will need for this specific project (Udemy Course Finder), based on your `docker-compose.yml` configuration:
+
+### 🚀 Starting & Stopping the Project
+
+**Start all services in the background** (Builds the images if they don't exist yet):
+```bash
+docker compose up -d
+```
+
+**Force rebuild and start all services** (Use this after making changes to `Dockerfile`s or installing new npm packages):
+```bash
+docker compose up --build -d
+```
+
+**Stop all running services**:
+```bash
+docker compose down
+```
+
+**Stop services AND wipe the database/cache** (Removes containers and volumes. Use this for a complete hard reset of your Postgres and Redis data):
+```bash
+docker compose down -v
+```
+
+---
+
+### 🔍 Viewing Logs
+
+**View logs for all services** (Follows the logs in real-time, press `Ctrl+C` to exit):
+```bash
+docker compose logs -f
+```
+
+**View logs for a specific service** (Replace `backend` with `frontend`, `scraper`, `postgres`, or `redis`):
+```bash
+docker compose logs -f backend
+```
+
+---
+
+### 🛠️ Managing Individual Services
+
+**Rebuild and restart a single service** (Example for the `frontend` without affecting the backend or database):
+```bash
+docker compose up -d --build frontend
+```
+
+**Stop a single service**:
+```bash
+docker compose stop scraper
+```
+
+**Start a single service**:
+```bash
+docker compose start scraper
+```
+
+---
+
+### 💻 Accessing Containers (Interactive Shell)
+
+Sometimes you need to run commands inside a running container (like running Prisma migrations in the backend):
+
+**Open a shell inside the Backend container**:
+```bash
+docker exec -it ucf-backend sh
+```
+
+**Open a shell inside the Frontend container**:
+```bash
+docker exec -it ucf-frontend sh
+```
+
+**Access the Postgres database using `psql` directly**:
+```bash
+docker exec -it ucf-postgres psql -U <YOUR_POSTGRES_USER> -d <YOUR_POSTGRES_DB>
+```
+
+---
+
+### 🧹 Cleaning Up & Maintenance
+
+**Check the status of your project's containers**:
+```bash
+docker compose ps
+```
+
+**Clear all unused Docker data** (Removes stopped containers, unused networks, and dangling images—helpful to free up disk space):
+```bash
+docker system prune -a
+```
+
+*(Tip: You can run these commands from the root directory of your project where your `docker-compose.yml` is located!)*
+
+
+If you want to completely wipe out any existing state, ignore all cached layers, and trigger a 100% fresh build from scratch, you should run these commands in this exact order:
+
+**1. Stop everything and wipe the database/volumes**
+This safely shuts down your project and deletes the local data volumes (meaning your Postgres DB and Redis caches will be completely wiped clean).
+```bash
+docker compose down -v
+```
+
+**2. Build all images completely from scratch**
+The `--no-cache` flag forces Docker to re-download all base images and re-run every single step in your `Dockerfile`s (like `npm install` and `pip install`), ignoring anything it saved previously.
+```bash
+docker compose build --no-cache
+```
+
+**3. Start the freshly built project**
+Once the build is finished, boot everything up in the background.
+```bash
+docker compose up -d
+```
+
+**Optional: The "Nuke Everything" Command**
+If you ever want to clear out *all* Docker data on your machine before running the steps above (this clears all stopped containers, unused networks, and all cached build data to free up disk space), you can run:
+```bash
+docker system prune -a --volumes -f
+
+
+If you want a single "Nuke Everything" command that you can copy and paste to completely obliterate all stopped containers, unused networks, all cached layers, all images, and wipe the Docker Desktop UI build history in one go, here it is:
+
+```bash
+docker system prune -a --volumes -f && docker builder prune -a -f && docker buildx history rm --all
+```
+
+**What this chained command does in order:**
+1. `docker system prune -a --volumes -f`: Deletes all stopped containers, unused networks, all images (not just dangling ones), and all unused volumes.
+2. `docker builder prune -a -f`: Massively clears out the hidden BuildKit cache (this fixes the "no space left on device" errors).
+3. `docker buildx history rm --all`: Clears the visual build history list shown in the Docker Desktop UI.
+
+You can save this somewhere handy and run it anytime Docker feels bloated or buggy!
+```

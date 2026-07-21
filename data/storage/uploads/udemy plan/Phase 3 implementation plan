@@ -1,0 +1,337 @@
+# Phase 3 — Core Product Features: Production-Quality UI & Backend Upgrades
+
+Upgrade all Phase 1 scaffold pages (Dashboard, Search/Browse, Course Detail, Favorites, History, Source Management) from basic functional shells to **polished, feature-complete, premium implementations**. This phase also upgrades the backend analytics service from its Phase 1 stub to return real data, and adds missing backend capabilities (category-filtered course queries, full dashboard stats endpoint, Redis caching for hot queries).
+
+---
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Category Filter UI**: The Courses/Search page currently has sort-by but no **category filter** or **provider filter** dropdowns. The ARU (Section 4.5) specifies: *"Filters: category, provider/source, rating, date added, expiry status."* I will add a collapsible filter panel with category, provider, and expiry status filters. The backend already supports `categoryId` and `providerId` query params. **Please confirm this scope.**
+
+> [!IMPORTANT]
+> **Dashboard "Recent Courses" Widget**: The current dashboard shows Active Sources and Recent Scraper Activity, but **no recent courses widget**. The ARU (Section 4.4) specifies: *"Landing view summarizing: newest courses, total courses tracked, active sources, courses expiring soon, and recent scraper activity."* I will add a "Newest Courses" card showing the 5 most recently discovered courses with thumbnails and "Get Course" links. **Please confirm.**
+
+> [!IMPORTANT]
+> **Real-Time Source Management Feedback**: Currently, the Sources page triggers scrape/test/retry but provides no **toast notifications** or real-time feedback to the user. I will add a toast notification system (using a lightweight custom toast or shadcn `sonner`) so users see success/failure messages for every action. **Please confirm this addition.**
+
+> [!WARNING]
+> **No charting library**: The Phase 3 analytics page shows category/provider breakdowns as horizontal bar charts built with pure CSS `<div>` bars. The ARU mentions analytics (Phase 4 scope for time-series), but Phase 3's "Courses by Category" and "Courses by Provider" charts are already rendered with CSS — no new charting library is needed yet. Phase 4 may introduce `recharts` for time-series if needed.
+
+---
+
+## Open Questions
+
+> [!IMPORTANT]
+> **Q1 — History Auto-Recording**: When the user clicks "Get Course" on the Course Detail page, it currently records a `CLICKED` event. Should we also auto-record a `VIEWED` event when the user opens the Course Detail page (on mount)? This would mean the History page shows *every course the user looked at*, not just courses they clicked "Get Course" on. **Please confirm or reject.**
+
+> [!IMPORTANT]
+> **Q2 — Course Card "Get Course" Click → History**: On the Courses grid page (not the detail page), clicking "Get Course" opens the coupon URL but does **not** record a history event. Should it? If yes, this means every "Get Course" click is tracked regardless of whether the user viewed the detail page first. **Please confirm.**
+
+---
+
+## Proposed Changes
+
+Changes are grouped by component. Frontend-heavy — the backend changes are targeted upgrades to analytics and stats.
+
+---
+
+### Backend — Analytics Service Upgrade
+
+Replace the Phase 1 analytics stub with real aggregate queries.
+
+#### [MODIFY] [analytics.service.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/backend/src/analytics/analytics.service.ts)
+- Replace the stub `getOverview()` with real queries:
+  - `totalCourses`: count all courses
+  - `totalProviders`: count all providers
+  - `activeSources`: count providers where `isEnabled = true`
+  - `totalScrapingRuns`: count all log entries
+  - `successRate`: `(successful runs / total runs) * 100`
+  - `coursesByCategory`: `GROUP BY category.name, COUNT(*)`, ordered by count desc, top 10
+  - `coursesByProvider`: `GROUP BY provider.name, COUNT(*)`, ordered by count desc
+  - `coursesAddedToday`: count courses with `createdAt >= today midnight`
+  - `rejectionReasons`: aggregate from logs (`coursesRejected` totals per provider)
+- Return type matches the frontend `AnalyticsOverview` interface
+
+---
+
+### Backend — Dashboard Stats Upgrade
+
+#### [MODIFY] [courses.service.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/backend/src/courses/courses.service.ts)
+- Enhance `getDashboardStats()` to return all fields the frontend `CourseStats` interface expects:
+  - `totalCourses`: total count of all courses
+  - `activeCourses`: count of active, non-expired, free courses
+  - `expiringSoon`: courses expiring within 24h
+  - `totalFavorites`: count of user's favorites (requires `userId` param or total across all users)
+  - `activeSources`: count of enabled providers
+
+#### [MODIFY] [courses.controller.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/backend/src/courses/courses.controller.ts)
+- Update `getStats()` to pass the authenticated user's ID to the service for favorite counting
+- Use `@CurrentUser()` decorator to extract user from JWT
+
+#### [MODIFY] [courses.repository.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/backend/src/courses/courses.repository.ts)
+- Add `countTotal()` method for all-courses count
+- Add `countFavorites(userId)` method (or move to favorites repository)
+
+---
+
+### Backend — Categories Endpoint
+
+The frontend needs to fetch categories for the filter dropdown, but there is no `GET /categories` endpoint.
+
+#### [NEW] `backend/src/categories/` module
+- `categories.module.ts` — NestJS module
+- `categories.controller.ts` — `GET /categories` returns all categories
+- `categories.service.ts` — fetches from Prisma
+- Minimal: just list all categories sorted alphabetically
+
+---
+
+### Frontend — Toast Notification System
+
+#### [NEW] [toast.tsx](file:///home/akai/Desktop/Udemy%20Course%20Finder/frontend/src/components/ui/toast.tsx)
+- Install and configure `sonner` (lightweight toast library compatible with shadcn/ui)
+- Add `<Toaster />` to the root layout
+- Provide `toast.success()`, `toast.error()` helpers
+
+#### [MODIFY] [layout.tsx](file:///home/akai/Desktop/Udemy%20Course%20Finder/frontend/src/app/layout.tsx)
+- Add `<Toaster />` component from sonner
+
+---
+
+### Frontend — Dashboard Page Upgrade
+
+#### [MODIFY] [dashboard/page.tsx](file:///home/akai/Desktop/Udemy%20Course%20Finder/frontend/src/app/(dashboard)/dashboard/page.tsx)
+**Current state**: Shows 5 stat cards + Active Sources + Recent Scraper Activity.  
+**Upgrade to**:
+- **5 stat cards** (keep existing, fix data to use `totalCourses` not just `activeCourses`)
+- **Newest Courses** widget: Show 5 most recently discovered courses in a compact horizontal card list with thumbnails, title (truncated), provider badge, and "Get Course" link
+- **Courses Expiring Soon** widget: Show up to 5 courses expiring within 24h, with countdown timers showing hours remaining
+- **Active Sources** widget (keep, polish with status dot animations for RUNNING state)
+- **Recent Scraper Activity** widget (keep, add courses found/accepted counts per run)
+- Add `useCourses()` hook call to fetch 5 newest courses
+- Add auto-refresh with `refetchInterval: 30000` on dashboard stats
+
+#### [NEW] [dashboard-widgets.tsx](file:///home/akai/Desktop/Udemy%20Course%20Finder/frontend/src/components/dashboard/dashboard-widgets.tsx)
+- `NewestCoursesWidget` — compact course list with thumbnails
+- `ExpiringSoonWidget` — countdown-style expiry cards
+- Extract Active Sources and Recent Activity into reusable widget components
+
+---
+
+### Frontend — Courses/Browse Page Upgrade
+
+#### [MODIFY] [courses/page.tsx](file:///home/akai/Desktop/Udemy%20Course%20Finder/frontend/src/app/(dashboard)/courses/page.tsx)
+**Current state**: Search bar + sort dropdown + course grid + pagination.  
+**Upgrade to**:
+- **Filter panel** (collapsible sidebar or horizontal bar):
+  - Category dropdown (populated from `GET /categories` via new `useCategories()` hook)
+  - Provider/Source dropdown (populated from existing `useProviders()`)
+  - Expiry status toggle (All / Active Only / Expired)
+  - "Clear Filters" button
+- **Active filter chips**: Show selected filters as removable badges above the grid
+- **Result count**: "Showing X of Y courses"
+- **Grid/List view toggle** (grid view = current cards, list view = compact table rows)
+- **Improved search**: Debounce search input (300ms) to avoid excessive API calls
+- **Course card improvements**:
+  - Add category badge
+  - Show "Expires in Xh" countdown for courses expiring within 48h
+  - Animate the favorite heart with a scale pulse on toggle
+- Wire "Get Course" click to record history event (if approved per Q2)
+
+#### [NEW] [course-card.tsx](file:///home/akai/Desktop/Udemy%20Course%20Finder/frontend/src/components/courses/course-card.tsx)
+- Extract the course card from the page into a **reusable component**
+- Used by: Courses page, Favorites page, Dashboard newest courses widget
+- Props: `course`, `isFavorited`, `onToggleFavorite`, `onGetCourse`, `compact?` (for dashboard widget)
+
+#### [NEW] [course-filters.tsx](file:///home/akai/Desktop/Udemy%20Course%20Finder/frontend/src/components/courses/course-filters.tsx)
+- Collapsible filter panel with category, provider, expiry dropdowns
+- Active filter chips display
+- Clear all button
+
+#### [NEW] [use-categories.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/frontend/src/lib/hooks/use-categories.ts)
+- TanStack Query hook for `GET /categories`
+- Long `staleTime` since categories rarely change
+
+#### [MODIFY] [api-client.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/frontend/src/lib/api-client.ts)
+- Add `categoriesApi.list()` function
+- Add `Category[]` response type (already defined, just need the API function)
+
+---
+
+### Frontend — Course Detail Page Upgrade
+
+#### [MODIFY] [courses/[id]/page.tsx](file:///home/akai/Desktop/Udemy%20Course%20Finder/frontend/src/app/(dashboard)/courses/[id]/page.tsx)
+**Current state**: Full detail card with hero image, metadata grid, description, actions.  
+**Upgrade to**:
+- **Auto-record VIEWED history** on mount (if approved per Q1)
+- **Related courses** section at the bottom: show up to 4 courses from the same category (new `useRelatedCourses(courseId, categoryId)` hook or filter from existing data)
+- **Share/Copy URL** button to copy the coupon URL to clipboard
+- **Expiry countdown**: If expires within 48h, show a prominent countdown badge with hours/minutes
+- **Breadcrumb navigation**: Courses → [Category Name] → Course Title
+- **Smooth page transitions**: Fade-in animation on load
+
+---
+
+### Frontend — Favorites Page Upgrade
+
+#### [MODIFY] [favorites/page.tsx](file:///home/akai/Desktop/Udemy%20Course%20Finder/frontend/src/app/(dashboard)/favorites/page.tsx)
+**Current state**: Grid of favorited course cards with remove button.  
+**Upgrade to**:
+- Use the new shared `CourseCard` component (DRY)
+- **Sort options**: Newest favorited, Course rating, Alphabetical
+- **Filter**: Show/hide expired courses toggle
+- **Batch actions**: "Remove all expired" button
+- **Counter badge**: "X active / Y total" in the header
+- **Toast feedback**: Show toast on add/remove favorite
+
+---
+
+### Frontend — History Page Upgrade
+
+#### [MODIFY] [history/page.tsx](file:///home/akai/Desktop/Udemy%20Course%20Finder/frontend/src/app/(dashboard)/history/page.tsx)
+**Current state**: Table view with action badges and pagination.  
+**Upgrade to**:
+- **Action filter tabs**: All / Viewed / Clicked / Enrolled (filter by action type)
+- **Date grouping**: Group entries by date (Today, Yesterday, This Week, Older)
+- **Course thumbnail** in the table for visual recognition
+- **Clear history** button with confirmation dialog
+- **Empty state enhancement**: Different empty messages per filtered action type
+
+---
+
+### Frontend — Source Management Page Upgrade
+
+#### [MODIFY] [sources/page.tsx](file:///home/akai/Desktop/Udemy%20Course%20Finder/frontend/src/app/(dashboard)/sources/page.tsx)
+**Current state**: Provider cards with enable/disable, test, scrape, retry, expandable stats/logs.  
+**Upgrade to**:
+- **Toast notifications** on every action (scrape triggered, test result, retry queued, enable/disable toggled)
+- **Timeout configuration**: Add an editable timeout field in the expanded details section (currently the backend supports `PATCH /providers/:id` with `timeoutMs`)
+- **Scrape progress indicator**: When a scrape is RUNNING, show an animated progress indicator on the card
+- **Full log viewer dialog**: Click "View All Logs" to open a dialog/sheet with paginated log history and filters
+- **Bulk actions**: "Enable All" / "Disable All" buttons in the header
+- **Source health summary**: At the top, show aggregate stats: "X/9 active, last run Y min ago, Z% success rate"
+- **Sort sources**: By name, last run, success rate, status
+
+#### [NEW] [log-viewer-dialog.tsx](file:///home/akai/Desktop/Udemy%20Course%20Finder/frontend/src/components/sources/log-viewer-dialog.tsx)
+- Full-screen sheet/dialog showing paginated logs for a provider
+- Columns: status icon, started at, finished at, duration, courses found/accepted/rejected, error message
+- Filters: status (success/failed/running)
+
+#### [NEW] [timeout-editor.tsx](file:///home/akai/Desktop/Udemy%20Course%20Finder/frontend/src/components/sources/timeout-editor.tsx)
+- Inline editable timeout field (shows current `timeoutMs`, click to edit, save via PATCH)
+
+---
+
+### Frontend — Settings Page Upgrade
+
+#### [MODIFY] [settings/page.tsx](file:///home/akai/Desktop/Udemy%20Course%20Finder/frontend/src/app/(dashboard)/settings/page.tsx)
+**Current state**: Static info cards showing profile, security, and system info.  
+**Upgrade to**:
+- **Scraping schedule display**: Show current `SCRAPE_INTERVAL_MINUTES` from backend settings
+- **Remove Phase 2 reference**: Update the info text that says "Scraper scheduling and advanced settings will be available in Phase 2" since Phase 2 is complete
+- **Password change form**: Allow the user to change their password (new/confirm password fields, calls a new backend endpoint or uses existing auth service)
+- **Theme toggle**: Add dark/light mode toggle (if not already in header)
+
+---
+
+### Frontend — Shared Components
+
+#### [MODIFY] [loading-state.tsx](file:///home/akai/Desktop/Udemy%20Course%20Finder/frontend/src/components/shared/loading-state.tsx)
+- Ensure `variant="card-grid"` renders 6 skeleton cards matching the course card layout (thumbnail + content)
+
+#### [MODIFY] [empty-state.tsx](file:///home/akai/Desktop/Udemy%20Course%20Finder/frontend/src/components/shared/empty-state.tsx)
+- Add subtle animation (fade-in + float) to the empty state icon
+
+---
+
+### Frontend — Global Improvements
+
+#### [MODIFY] [globals.css](file:///home/akai/Desktop/Udemy%20Course%20Finder/frontend/src/app/globals.css)
+- Add countdown badge styles
+- Add filter chip styles
+- Add pulse animation for running status indicators
+- Refine card hover transitions
+
+#### [MODIFY] [middleware.ts](file:///home/akai/Desktop/Udemy%20Course%20Finder/frontend/src/middleware.ts)
+- Ensure auth redirect works correctly for all protected routes
+
+---
+
+## Verification Plan
+
+### Automated Tests
+
+```bash
+# Backend — ensure all new/modified endpoints work
+cd backend && npm run test
+
+# Frontend — lint and type check
+cd frontend && npm run lint && npx tsc --noEmit
+```
+
+### Manual Verification
+
+1. **Dashboard**: All 5 stat cards show real data. Newest Courses widget shows courses. Expiring Soon widget shows countdown. Auto-refreshes every 30s.
+2. **Courses/Browse**: Category and provider filter dropdowns populate correctly. Filters apply and result count updates. Search debounces. Grid/list toggle works. Course cards show category badges and expiry countdowns. Pagination works with filters.
+3. **Course Detail**: Page loads with hero, metadata grid, actions. Favorite toggle works with heart animation. "Get Course" opens new tab and records CLICKED history. Share/copy URL works. Related courses display.
+4. **Favorites**: Shared CourseCard component renders. Sort options work. Expired filter toggle works. Remove toast shows. "Remove all expired" works.
+5. **History**: Action filter tabs work. Date grouping displays correctly. Thumbnails show in table. Clear history with confirmation dialog works.
+6. **Sources**: Toast notifications fire on scrape/test/retry/toggle. Timeout is editable and saves. Full log viewer dialog opens with paginated logs. Bulk enable/disable works. Health summary is accurate.
+7. **Settings**: Phase 2 reference removed. System info is accurate.
+8. **Analytics**: Real data populates all cards. Category and provider breakdowns show actual counts with proportional bars.
+9. **Toasts**: Success/error toasts appear for all mutations (favorite, scrape, test, retry, enable/disable).
+10. **Responsive**: All pages functional on desktop and tablet viewports.
+
+### Checklist
+
+- [ ] Backend analytics returns real aggregate data
+- [ ] Backend dashboard stats returns all required fields
+- [ ] Categories endpoint works and returns seeded categories
+- [ ] Toast notification system integrated
+- [ ] Dashboard shows newest courses and expiring soon widgets
+- [ ] Course filters (category, provider, expiry) work end-to-end
+- [ ] CourseCard is a shared reusable component
+- [ ] Course Detail page records VIEWED history
+- [ ] Favorites page uses shared CourseCard with sort/filter
+- [ ] History page has action filter tabs and date grouping
+- [ ] Sources page shows toast feedback on all actions
+- [ ] Sources page has timeout editing and full log viewer
+- [ ] Settings page updated (Phase 2 reference removed)
+- [ ] All pages have proper loading/empty/error states
+- [ ] Frontend builds without type or lint errors
+
+---
+
+## Execution Order
+
+```mermaid
+graph TD
+    A["3A: Backend Upgrades"] --> A1["Analytics service — real queries"]
+    A1 --> A2["Dashboard stats — full fields + user favorites count"]
+    A2 --> A3["Categories module — GET /categories endpoint"]
+    
+    A3 --> B["3B: Frontend Foundation"]
+    B --> B1["Toast system (sonner) + root layout integration"]
+    B1 --> B2["Shared CourseCard component"]
+    B2 --> B3["CourseFilters component + useCategories hook"]
+    B3 --> B4["API client — add categoriesApi"]
+    
+    B4 --> C["3C: Page Upgrades"]
+    C --> C1["Dashboard — newest courses + expiring soon widgets"]
+    C1 --> C2["Courses — filters, debounced search, grid/list toggle"]
+    C2 --> C3["Course Detail — auto-history, related courses, share URL"]
+    C3 --> C4["Favorites — shared card, sort, expired filter"]
+    C4 --> C5["History — action tabs, date groups, thumbnails"]
+    C5 --> C6["Sources — toasts, timeout editor, full log viewer"]
+    C6 --> C7["Settings — remove Phase 2 reference, scrape schedule"]
+    
+    C7 --> D["3D: Polish & Verify"]
+    D --> D1["Global CSS refinements"]
+    D1 --> D2["Loading/empty state animations"]
+    D2 --> D3["Type check + lint + build verification"]
+    D3 --> D4["Manual testing all flows"]
+```
+
+> This plan covers **Phase 3 only**. Phase 4 (Analytics time-series, security hardening, rate limiting review, full test coverage, documentation) will be planned separately after Phase 3 is verified.
+
