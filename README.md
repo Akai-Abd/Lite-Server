@@ -20,7 +20,7 @@
 - 🔐 **Secure by Design:** Built-in authentication, robust authorization, and comprehensive audit logging.
 - 🧩 **Extensible Architecture:** Modular plugin system tailored for your specific workflow needs.
 - 🌐 **Cross-Platform:** Runs seamlessly on Windows, Linux, and macOS.
-- 📱 **Modern Interface:** Beautiful, responsive React-based file manager and intuitive admin dashboard.
+- 📱 **Modern Interface:** Beautiful, responsive React-based file manager.
 - 💾 **Versatile Storage:** Supports local filesystem and cloud storage backends effortlessly.
 
 ---
@@ -40,7 +40,7 @@ pnpm build
 ```
 
 ### 3. Start Development
-Run the complete ecosystem (API, File Manager, Admin Panel) concurrently:
+Run the complete ecosystem (API, File Manager) concurrently:
 ```bash
 pnpm dev
 ```
@@ -51,7 +51,6 @@ pnpm dev
 | **API Server** | [http://localhost:3000](http://localhost:3000) |
 | **API Documentation** | [http://localhost:3000/docs](http://localhost:3000/docs) |
 | **File Manager UI** | [http://localhost:3001](http://localhost:3001) |
-| **Admin Dashboard** | [http://localhost:3002](http://localhost:3002) |
 
 ---
 
@@ -73,8 +72,7 @@ Organized as a modular monorepo for maintainability and scale:
 📦 lite-server
  ┣ 📂 apps
  ┃ ┣ 📂 server     # Main Fastify backend
- ┃ ┣ 📂 web        # React-based file manager UI
- ┃ ┗ 📂 admin      # Admin control dashboard
+ ┃ ┗ 📂 web        # React-based file manager UI
  ┗ 📂 packages
    ┣ 📂 api        # HTTP routes and handlers
    ┣ 📂 auth       # Authentication & authorization logic
