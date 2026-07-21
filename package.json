@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "pnpm -r run dev",
     "build": "pnpm -r run build",
+    "start": "pnpm --filter server start",
     "test": "pnpm -r run test",
     "lint": "pnpm -r run lint",
     "clean": "pnpm -r run clean",

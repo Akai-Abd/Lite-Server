@@ -271,8 +271,8 @@ export const ServerConfigSchema = z.object({
   logLevel: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   corsOrigins: z.array(z.string()).default([]),
   sessionMaxAge: z.number().int().nonnegative().default(86400),
-  uploadChunkSize: z.number().int().nonnegative().default(5 * 1024 * 1024),
-  uploadMaxSize: z.number().int().nonnegative().default(100 * 1024 * 1024 * 1024),
+  uploadChunkSize: z.number().int().nonnegative().default(1 * 1024 * 1024), // 1MB for 512MB RAM safety
+  uploadMaxSize: z.number().int().nonnegative().default(15 * 1024 * 1024 * 1024), // 15GB limit for 18GB storage
   maxConcurrentUploads: z.number().int().nonnegative().default(10),
   rateLimitMax: z.number().int().nonnegative().default(1000),
   rateLimitWindow: z.number().int().nonnegative().default(60000),
