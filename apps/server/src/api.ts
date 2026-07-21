@@ -36,6 +36,7 @@ export async function createApiServer(deps: ApiServerDependencies): Promise<Fast
   const { auth, vfs, config, core } = deps
 
   const server = Fastify({
+    bodyLimit: config.uploadMaxSize,
     logger: {
       level: config.logLevel,
       transport: {
@@ -263,14 +264,14 @@ export async function createApiServer(deps: ApiServerDependencies): Promise<Fast
         return reply.code(400).send({ success: false, error: { code: 'NO_FILE', message: 'No file uploaded' } })
       }
 
-      const buffer = await data.toBuffer()
       const query = request.query as { path?: string }
       const customPath = query.path ? query.path.replace(/^\/+/, '') : data.filename
       const path = `/uploads/${customPath}`
 
-      await vfs.write(path, buffer)
+      const writeStream = await vfs.writeStream(path)
+      await Readable.toWeb(data.file as any).pipeTo(writeStream)
 
-      return { success: true, data: { path, size: buffer.length } }
+      return { success: true, data: { path, size: data.file.bytesRead || 0 } }
     }
   )
 
