@@ -51,7 +51,7 @@ pnpm dev
 | **API Server** | [http://localhost:3000](http://localhost:3000) |
 | **API Documentation** | [http://localhost:3000/docs](http://localhost:3000/docs) |
 | **File Manager UI** | [http://localhost:3001](http://localhost:3001) |
-| **Admin Console** | [http://localhost:3002](http://localhost:3002) |
+| **Admin Console** | [http://localhost:3002](http://localhost:3001) |
 
 ---
 
