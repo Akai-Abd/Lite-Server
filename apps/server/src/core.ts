@@ -1,8 +1,7 @@
 import Database from 'better-sqlite3'
-import type { User, AuditLog } from '@lite-server/shared'
-import { createAuthService, type AuthService } from '@lite-server/auth'
-import { createVFS, type VirtualFileSystem } from '@lite-server/vfs'
-import { createPluginManager, type PluginManager } from '@lite-server/plugins'
+import type { User, AuditLog } from './shared.js'
+import { createAuthService, type AuthService } from './auth.js'
+import { createVFS, type VFS } from './vfs.js'
 import { mkdirSync } from 'fs'
 
 export interface CoreConfig {
@@ -13,8 +12,7 @@ export interface CoreConfig {
 export class Core {
   private db: Database.Database
   public auth: AuthService
-  public vfs: VirtualFileSystem
-  public pluginManager: PluginManager
+  public vfs: VFS
 
   constructor(config: CoreConfig) {
     // Ensure data directory exists
@@ -22,7 +20,6 @@ export class Core {
     this.db = new Database(`${config.dataDir}/lite-server.db`)
     this.auth = createAuthService()
     this.vfs = createVFS()
-    this.pluginManager = createPluginManager()
   }
 
   async initialize(): Promise<void> {
@@ -243,7 +240,6 @@ export class Core {
   }
 
   async shutdown(): Promise<void> {
-    await this.pluginManager.shutdown()
     this.db.close()
     console.log('[Core] Shutdown complete')
   }

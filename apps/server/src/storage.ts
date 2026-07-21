@@ -1,20 +1,5 @@
 import { join } from 'path'
 
-export interface StorageDriver {
-  name: string
-  initialize(config: Record<string, unknown>): Promise<void>
-  read(path: string): Promise<Buffer>
-  readStream(path: string): Promise<ReadableStream>
-  write(path: string, data: Buffer): Promise<void>
-  writeStream(path: string): Promise<WritableStream>
-  delete(path: string): Promise<void>
-  exists(path: string): Promise<boolean>
-  stat(path: string): Promise<FileStats>
-  list(path: string): Promise<string[]>
-  mkdir(path: string): Promise<void>
-  rename(oldPath: string, newPath: string): Promise<void>
-  copy(sourcePath: string, destPath: string): Promise<void>
-}
 
 export interface FileStats {
   size: number
@@ -24,7 +9,7 @@ export interface FileStats {
   modifiedAt: Date
 }
 
-export class LocalStorageDriver implements StorageDriver {
+export class LocalStorageDriver {
   name = 'local'
   private basePath: string = ''
 
@@ -161,16 +146,4 @@ export class LocalStorageDriver implements StorageDriver {
     }
     return resolved
   }
-}
-
-export const storageDrivers: Record<string, StorageDriver> = {
-  local: new LocalStorageDriver(),
-}
-
-export function registerStorageDriver(driver: StorageDriver): void {
-  storageDrivers[driver.name] = driver
-}
-
-export function getStorageDriver(name: string): StorageDriver | undefined {
-  return storageDrivers[name]
 }

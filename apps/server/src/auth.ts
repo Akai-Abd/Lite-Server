@@ -1,5 +1,5 @@
 import { hash, verify } from 'argon2'
-import type { User, Session } from '@lite-server/shared'
+import type { User, Session } from './shared.js'
 
 export interface AuthService {
   hashPassword(password: string): Promise<string>

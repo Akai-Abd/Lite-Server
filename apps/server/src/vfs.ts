@@ -1,37 +1,17 @@
-import type { FileEntry, Mount } from '@lite-server/shared'
-import type { StorageDriver } from '@lite-server/storage'
-import { getStorageDriver } from '@lite-server/storage'
+import type { FileEntry, Mount } from './shared.js'
+import { LocalStorageDriver } from './storage.js'
 
-export interface VirtualFileSystem {
-  initialize(): Promise<void>
-  mount(mount: Mount): Promise<void>
-  unmount(mountId: string): Promise<void>
-  resolvePath(virtualPath: string): Promise<{ mount: Mount; storagePath: string }>
-  list(virtualPath: string): Promise<FileEntry[]>
-  read(virtualPath: string): Promise<Buffer>
-  readStream(virtualPath: string): Promise<ReadableStream>
-  write(virtualPath: string, data: Buffer): Promise<void>
-  writeStream(virtualPath: string): Promise<WritableStream>
-  delete(virtualPath: string): Promise<void>
-  exists(virtualPath: string): Promise<boolean>
-  mkdir(virtualPath: string): Promise<void>
-  rename(oldPath: string, newPath: string): Promise<void>
-  copy(sourcePath: string, destPath: string): Promise<void>
-}
 
-export class VFS implements VirtualFileSystem {
+export class VFS {
   private mounts: Map<string, Mount> = new Map()
-  private drivers: Map<string, StorageDriver> = new Map()
+  private drivers: Map<string, LocalStorageDriver> = new Map()
 
   async initialize(): Promise<void> {
     // Load mounts from database (placeholder)
   }
 
   async mount(mount: Mount): Promise<void> {
-    const driver = getStorageDriver(mount.driver)
-    if (!driver) {
-      throw new Error(`Storage driver '${mount.driver}' not found`)
-    }
+    const driver = new LocalStorageDriver()
     await driver.initialize(mount.config)
     this.mounts.set(mount.id, mount)
     this.drivers.set(mount.id, driver)
@@ -171,6 +151,6 @@ export class VFS implements VirtualFileSystem {
   }
 }
 
-export function createVFS(): VirtualFileSystem {
+export function createVFS(): VFS {
   return new VFS()
 }

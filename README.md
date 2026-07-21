@@ -18,10 +18,9 @@
 
 - 🚀 **High Performance:** Built on [Fastify](https://www.fastify.io/) for lightning-fast API responses.
 - 🔐 **Secure by Design:** Built-in authentication, robust authorization, and comprehensive audit logging.
-- 🧩 **Extensible Architecture:** Modular plugin system tailored for your specific workflow needs.
 - 🌐 **Cross-Platform:** Runs seamlessly on Windows, Linux, and macOS.
 - 📱 **Modern Interface:** Beautiful, responsive React-based file manager.
-- 💾 **Versatile Storage:** Supports local filesystem and cloud storage backends effortlessly.
+- 💾 **Local Storage:** Direct local filesystem operations for maximum speed.
 
 ---
 
@@ -46,12 +45,16 @@ pnpm dev
 ```
 
 ### 4. Access the Applications
+The backend server statically serves the frontend directly, meaning you can access everything from a single port:
+
 | Application | URL |
 | ----------- | --- |
-| **API Server** | [http://localhost:3000](http://localhost:3000) |
+| **API & UI Server** | [http://localhost:3000](http://localhost:3000) |
 | **API Documentation** | [http://localhost:3000/docs](http://localhost:3000/docs) |
-| **File Manager UI** | [http://localhost:3001](http://localhost:3001) |
-| **Admin Console** | [http://localhost:3001](http://localhost:3001) |
+| **File Manager UI** | [http://localhost:3000](http://localhost:3000) |
+| **Admin Console** | [http://localhost:3000](http://localhost:3000) |
+
+*(Note: During active development with `pnpm dev`, you can also use Vite's dev server on `http://localhost:3001` for Hot Module Replacement).*
 
 ---
 
@@ -67,21 +70,13 @@ pnpm dev
 
 ## 🏗️ Architecture
 
-Organized as a modular monorepo for maintainability and scale:
+Organized into a simple two-app workspace for maximum maintainability:
 
 ```text
 📦 lite-server
- ┣ 📂 apps
- ┃ ┣ 📂 server     # Main Fastify backend
- ┃ ┗ 📂 web        # React-based file manager UI
- ┗ 📂 packages
-   ┣ 📂 api        # HTTP routes and handlers
-   ┣ 📂 auth       # Authentication & authorization logic
-   ┣ 📂 core       # Database schemas & business logic
-   ┣ 📂 plugins    # Plugin registry & lifecycle management
-   ┣ 📂 shared     # Shared TypeScript interfaces & utilities
-   ┣ 📂 storage    # Abstracted storage adapters (Local/S3)
-   ┗ 📂 vfs        # Virtual file system core
+ ┗ 📂 apps
+   ┣ 📂 server     # Main Fastify backend (API, Auth, Storage, VFS)
+   ┗ 📂 web        # React-based file manager UI
 ```
 
 ---

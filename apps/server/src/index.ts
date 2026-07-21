@@ -1,6 +1,6 @@
-import { createCore } from '@lite-server/core'
-import { createApiServer } from '@lite-server/api'
-import { ServerConfigSchema, type ServerConfig } from '@lite-server/shared'
+import { createCore } from './core.js'
+import { createApiServer } from './api.js'
+import { ServerConfigSchema, type ServerConfig } from './shared.js'
 import { existsSync, readFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
@@ -58,7 +58,7 @@ async function main() {
   const server = await createApiServer({
     auth: core.auth,
     vfs: core.vfs,
-    pluginManager: core.pluginManager,
+
     config,
     core,
   })

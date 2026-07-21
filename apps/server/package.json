@@ -1,24 +1,36 @@
 {
-  "name": "@lite-server/server",
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch --ignore data src/index.ts",
     "build": "tsc && tsc-alias",
     "start": "node dist/index.js",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@lite-server/core": "workspace:*",
-    "@lite-server/api": "workspace:*",
-    "@lite-server/shared": "workspace:*"
+    "@fastify/cookie": "^9.3.1",
+    "@fastify/cors": "^9.0.1",
+    "@fastify/multipart": "^8.3.0",
+    "@fastify/rate-limit": "^9.1.0",
+    "@fastify/static": "^6.12.0",
+    "@fastify/swagger": "^8.14.0",
+    "@fastify/swagger-ui": "^4.1.1",
+    "archiver": "^8.0.0",
+    "argon2": "^0.31.2",
+    "better-sqlite3": "^12.11.1",
+    "fastify": "^4.28.0",
+    "pino": "^9.2.0",
+    "pino-pretty": "^11.2.0",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@types/archiver": "^8.0.0",
+    "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^20.14.0",
+    "tsc-alias": "^1.8.8",
     "tsx": "^4.16.0",
     "typescript": "^5.5.0",
-    "tsc-alias": "^1.8.8",
     "vitest": "^1.6.0"
   }
 }

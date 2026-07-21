@@ -5,18 +5,24 @@ import multipart from '@fastify/multipart'
 import cookie from '@fastify/cookie'
 import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
-import type { ServerConfig, Session, User } from '@lite-server/shared'
+import fastifyStatic from '@fastify/static'
+import type { ServerConfig, Session, User } from './shared.js'
 import * as archiverMod from 'archiver'
 const archiver = (archiverMod as any).default || archiverMod
 import { Readable } from 'stream'
-import type { AuthService } from '@lite-server/auth'
-import type { VirtualFileSystem } from '@lite-server/vfs'
-import type { PluginManager } from '@lite-server/plugins'
+import type { AuthService } from './auth.js'
+import type { VFS } from './vfs.js'
+
+import fs from 'fs'
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
 
 export interface ApiServerDependencies {
   auth: AuthService
-  vfs: VirtualFileSystem
-  pluginManager: PluginManager
+  vfs: VFS
   config: ServerConfig
   core: any // Core instance for accessing database
 }
@@ -27,7 +33,7 @@ export interface AuthenticatedRequest extends FastifyRequest {
 }
 
 export async function createApiServer(deps: ApiServerDependencies): Promise<FastifyInstance> {
-  const { auth, vfs, pluginManager, config, core } = deps
+  const { auth, vfs, config, core } = deps
 
   const server = Fastify({
     logger: {
@@ -81,6 +87,16 @@ export async function createApiServer(deps: ApiServerDependencies): Promise<Fast
       deepLinking: false
     }
   })
+
+  // Serve the frontend web app statically from apps/web/dist if it exists
+  const webDistPath = join(__dirname, '../../../apps/web/dist')
+  if (fs.existsSync(webDistPath)) {
+    await server.register(fastifyStatic, {
+      root: webDistPath,
+      prefix: '/',
+      decorateReply: false,
+    })
+  }
 
   // Authentication middleware
   server.decorateRequest('session', null)
@@ -138,7 +154,6 @@ export async function createApiServer(deps: ApiServerDependencies): Promise<Fast
       }
 
       const session = await auth.createSession(user)
-      await pluginManager.triggerHook('onLogin', { userId: user.id, username: user.username })
 
       return { success: true, data: { token: session.token, user } }
     }
@@ -182,7 +197,6 @@ export async function createApiServer(deps: ApiServerDependencies): Promise<Fast
       }
 
       const stream = await vfs.readStream(path)
-      await pluginManager.triggerHook('onDownload', { userId: request.session.userId, filePath: path })
 
       reply.header('Content-Disposition', `attachment; filename="${path.split('/').pop()}"`)
       return reply.send(stream)
@@ -255,7 +269,6 @@ export async function createApiServer(deps: ApiServerDependencies): Promise<Fast
       const path = `/uploads/${customPath}`
 
       await vfs.write(path, buffer)
-      await pluginManager.triggerHook('onUpload', { userId: request.session.userId, filePath: path, size: buffer.length })
 
       return { success: true, data: { path, size: buffer.length } }
     }
@@ -279,7 +292,6 @@ export async function createApiServer(deps: ApiServerDependencies): Promise<Fast
       }
 
       await vfs.delete(path)
-      await pluginManager.triggerHook('onDelete', { userId: request.session.userId, filePath: path })
 
       return { success: true, data: null }
     }
@@ -313,7 +325,6 @@ export async function createApiServer(deps: ApiServerDependencies): Promise<Fast
       for (const path of paths) {
         try {
           await vfs.delete(path)
-          await pluginManager.triggerHook('onDelete', { userId: request.session.userId, filePath: path })
           results.succeeded.push(path)
         } catch (error: any) {
           results.failed.push({
@@ -327,16 +338,7 @@ export async function createApiServer(deps: ApiServerDependencies): Promise<Fast
     }
   )
 
-  // ─── Plugin Routes ────────────────────────────────────────────────────────
 
-  server.get('/api/plugins', async (request: AuthenticatedRequest, reply) => {
-    if (!request.session) {
-      return reply.code(401).send({ success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } })
-    }
-
-    const plugins = pluginManager.listPlugins()
-    return { success: true, data: plugins }
-  })
 
   // ─── User Management Routes ───────────────────────────────────────────────
 
