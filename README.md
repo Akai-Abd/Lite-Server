@@ -1,82 +1,95 @@
-# Lite-Server
+<div align="center">
+  <img src="assets/banner.png" alt="Lite-Server Banner" width="100%" />
+  
+  # Lite-Server 🚀
+  
+  **A modern, lightweight, and extensible file platform built with TypeScript & Node.js.**
+  
+  [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+  [![Node.js Version](https://img.shields.io/badge/Node.js-%3E%3D20.0.0-brightgreen.svg)](https://nodejs.org)
+  [![TypeScript](https://img.shields.io/badge/TypeScript-5.5-blue.svg)](https://www.typescriptlang.org/)
+  [![pnpm](https://img.shields.io/badge/pnpm-9.0-orange.svg)](https://pnpm.io/)
+  
+</div>
 
-A modern, self-hosted, extensible file platform built with TypeScript and Node.js.
+---
 
-## Features
+## ✨ Features
 
-- 🚀 **Lightweight & Fast** - Built on Fastify for high performance
-- 🔐 **Secure by default** - Authentication, authorization, and audit logging
-- 📦 **Modular architecture** - Plugin system for extensibility
-- 🌐 **Cross-platform** - Runs on Windows, Linux, and macOS
-- 📱 **Modern web UI** - React-based file manager and admin dashboard
-- 💾 **Multiple storage backends** - Local filesystem with support for cloud storage
+- 🚀 **High Performance:** Built on [Fastify](https://www.fastify.io/) for lightning-fast API responses.
+- 🔐 **Secure by Design:** Built-in authentication, robust authorization, and comprehensive audit logging.
+- 🧩 **Extensible Architecture:** Modular plugin system tailored for your specific workflow needs.
+- 🌐 **Cross-Platform:** Runs seamlessly on Windows, Linux, and macOS.
+- 📱 **Modern Interface:** Beautiful, responsive React-based file manager and intuitive admin dashboard.
+- 💾 **Versatile Storage:** Supports local filesystem and cloud storage backends effortlessly.
 
-## Quick Start
+---
 
-1. **Install dependencies**
-   ```bash
-   pnpm install
-   ```
+## ⚡ Quick Start
 
-2. **Build all packages**
-   ```bash
-   pnpm build
-   ```
+Get your environment up and running in seconds.
 
-3. **Start the server**
-   ```bash
-   cd apps/server
-   pnpm start
-   ```
+### 1. Install Dependencies
+```bash
+pnpm install
+```
 
-4. **Access the applications**
-   - API: http://localhost:3000
-   - API Docs: http://localhost:3000/docs
-   - File Manager: http://localhost:3001
-   - Admin Dashboard: http://localhost:3002
+### 2. Build the Workspace
+```bash
+pnpm build
+```
 
-## Development
-
-Start all apps in development mode:
+### 3. Start Development
+Run the complete ecosystem (API, File Manager, Admin Panel) concurrently:
 ```bash
 pnpm dev
 ```
 
-This starts:
-- Server on port 3000
-- Web file manager on port 3001
-- Admin dashboard on port 3002
+### 4. Access the Applications
+| Application | URL |
+| ----------- | --- |
+| **API Server** | [http://localhost:3000](http://localhost:3000) |
+| **API Documentation** | [http://localhost:3000/docs](http://localhost:3000/docs) |
+| **File Manager UI** | [http://localhost:3001](http://localhost:3001) |
+| **Admin Dashboard** | [http://localhost:3002](http://localhost:3002) |
 
-## Default Credentials
+---
 
-- **Username:** admin
-- **Password:** admin
+## 🔑 Default Credentials
 
-⚠️ **Change the default password immediately in production!**
+- **Username:** `admin`
+- **Password:** `admin`
 
-## Architecture
+> [!WARNING]
+> Ensure you change the default password immediately when deploying to a production environment!
 
-The project is organized as a monorepo with the following structure:
+---
 
+## 🏗️ Architecture
+
+Organized as a modular monorepo for maintainability and scale:
+
+```text
+📦 lite-server
+ ┣ 📂 apps
+ ┃ ┣ 📂 server     # Main Fastify backend
+ ┃ ┣ 📂 web        # React-based file manager UI
+ ┃ ┗ 📂 admin      # Admin control dashboard
+ ┗ 📂 packages
+   ┣ 📂 api        # HTTP routes and handlers
+   ┣ 📂 auth       # Authentication & authorization logic
+   ┣ 📂 core       # Database schemas & business logic
+   ┣ 📂 plugins    # Plugin registry & lifecycle management
+   ┣ 📂 shared     # Shared TypeScript interfaces & utilities
+   ┣ 📂 storage    # Abstracted storage adapters (Local/S3)
+   ┗ 📂 vfs        # Virtual file system core
 ```
-apps/
-  server/     # Main server application
-  web/        # File manager web app
-  admin/      # Admin dashboard
 
-packages/
-  core/       # Database and business logic
-  api/        # Fastify HTTP API
-  auth/       # Authentication service
-  storage/    # Storage driver abstraction
-  vfs/        # Virtual file system
-  plugins/    # Plugin management
-  shared/     # Shared types and utilities
-```
+---
 
-## Configuration
+## ⚙️ Configuration
 
-Create a `config.json` file in the server directory:
+Create a `config.json` inside the `apps/server` directory to customize your deployment:
 
 ```json
 {
@@ -91,10 +104,14 @@ Create a `config.json` file in the server directory:
 }
 ```
 
-## API Documentation
+---
 
-Once the server is running, visit http://localhost:3000/docs for interactive API documentation.
+## 📚 API Documentation
 
-## License
+Once the server is running, navigate to [http://localhost:3000/docs](http://localhost:3000/docs) to access the interactive Swagger OpenAPI documentation.
 
-MIT
+---
+
+## 📄 License
+
+This project is licensed under the [MIT License](LICENSE).

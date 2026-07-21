@@ -32,13 +32,13 @@ importers:
 
   apps/server:
     dependencies:
-      '@ar-server/api':
+      '@lite-server/api':
         specifier: workspace:*
         version: link:../../packages/api
-      '@ar-server/core':
+      '@lite-server/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@ar-server/shared':
+      '@lite-server/shared':
         specifier: workspace:*
         version: link:../../packages/shared
     devDependencies:
@@ -88,18 +88,6 @@ importers:
 
   packages/api:
     dependencies:
-      '@ar-server/auth':
-        specifier: workspace:*
-        version: link:../auth
-      '@ar-server/plugins':
-        specifier: workspace:*
-        version: link:../plugins
-      '@ar-server/shared':
-        specifier: workspace:*
-        version: link:../shared
-      '@ar-server/vfs':
-        specifier: workspace:*
-        version: link:../vfs
       '@fastify/cookie':
         specifier: ^9.3.1
         version: 9.4.0
@@ -112,6 +100,18 @@ importers:
       '@fastify/rate-limit':
         specifier: ^9.1.0
         version: 9.1.0
+      '@lite-server/auth':
+        specifier: workspace:*
+        version: link:../auth
+      '@lite-server/plugins':
+        specifier: workspace:*
+        version: link:../plugins
+      '@lite-server/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@lite-server/vfs':
+        specifier: workspace:*
+        version: link:../vfs
       archiver:
         specifier: ^8.0.0
         version: 8.0.0
@@ -134,7 +134,7 @@ importers:
 
   packages/auth:
     dependencies:
-      '@ar-server/shared':
+      '@lite-server/shared':
         specifier: workspace:*
         version: link:../shared
       argon2:
@@ -147,16 +147,16 @@ importers:
 
   packages/core:
     dependencies:
-      '@ar-server/auth':
+      '@lite-server/auth':
         specifier: workspace:*
         version: link:../auth
-      '@ar-server/plugins':
+      '@lite-server/plugins':
         specifier: workspace:*
         version: link:../plugins
-      '@ar-server/shared':
+      '@lite-server/shared':
         specifier: workspace:*
         version: link:../shared
-      '@ar-server/vfs':
+      '@lite-server/vfs':
         specifier: workspace:*
         version: link:../vfs
       better-sqlite3:
@@ -172,7 +172,7 @@ importers:
 
   packages/plugins:
     dependencies:
-      '@ar-server/shared':
+      '@lite-server/shared':
         specifier: workspace:*
         version: link:../shared
     devDependencies:
@@ -192,7 +192,7 @@ importers:
 
   packages/storage:
     dependencies:
-      '@ar-server/shared':
+      '@lite-server/shared':
         specifier: workspace:*
         version: link:../shared
     devDependencies:
@@ -202,10 +202,10 @@ importers:
 
   packages/vfs:
     dependencies:
-      '@ar-server/shared':
+      '@lite-server/shared':
         specifier: workspace:*
         version: link:../shared
-      '@ar-server/storage':
+      '@lite-server/storage':
         specifier: workspace:*
         version: link:../storage
     devDependencies:
