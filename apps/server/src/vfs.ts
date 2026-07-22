@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import type { FileEntry, Mount } from './shared.js'
 import { LocalStorageDriver } from './storage.js'
 
@@ -39,8 +40,9 @@ export class VFS {
     if (!driver) throw new Error(`Driver not found for mount ${mount.id}`)
 
     const entries = await driver.list(storagePath)
+    const visibleEntries = entries.filter((name) => name !== '.trash' && !name.startsWith('.'))
     return Promise.all(
-      entries.map(async (name) => {
+      visibleEntries.map(async (name) => {
         const itemStoragePath = storagePath ? `${storagePath}/${name}` : name
         const stats = await driver.stat(itemStoragePath).catch(() => null)
         const isDir = stats?.isDirectory ?? false
@@ -148,6 +150,26 @@ export class VFS {
       const data = await this.read(sourcePath)
       await this.write(destPath, data)
     }
+  }
+
+  async search(virtualPath: string, query: string): Promise<FileEntry[]> {
+    const results: FileEntry[] = []
+    const q = query.toLowerCase()
+
+    const searchDir = async (dirPath: string) => {
+      const items = await this.list(dirPath).catch(() => [])
+      for (const item of items) {
+        if (item.name.toLowerCase().includes(q)) {
+          results.push(item)
+        }
+        if (item.type === 'directory') {
+          await searchDir(item.virtualPath)
+        }
+      }
+    }
+
+    await searchDir(virtualPath)
+    return results
   }
 }
 

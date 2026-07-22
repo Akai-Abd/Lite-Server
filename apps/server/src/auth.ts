@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import { hash, verify } from 'argon2'
 import type { User, Session } from './shared.js'
 

@@ -1,0 +1,248 @@
+# 🚀 Lite-Server — Feature Suggestions
+
+After a deep analysis of the codebase, here are feature suggestions prioritized by impact. They are grouped into **high-value quick wins**, **core platform features**, and **advanced capabilities**.
+
+---
+
+## 🏆 Tier 1 — High-Impact, High-Value
+
+### 1. 🔗 Public Share Links (File & Folder Sharing)
+**Who benefits:** Admin + Users
+**Why it matters:** The `shares` table and `ShareSchema` already exist in your DB and types but are **completely unimplemented**. This is the single highest-value feature you can add.
+
+**What it does:**
+- Right-click a file/folder → "Create Share Link"
+- Generates a unique public URL (e.g., `/s/abc123`) accessible **without login**
+- Optional: password-protect the link, set expiry date, set max download count
+- Admin dashboard to see all active share links and revoke them
+- Download counter shown in the share management panel
+
+> [!TIP]
+> The database schema, Zod types, and token indexing are already in place — this is mostly API route + UI work.
+
+---
+
+### 2. 📂 Create New Folder (from UI)
+**Who benefits:** All users
+**Why it matters:** The VFS has `mkdir()` but there's **no API route or UI** to create folders. Users must upload files into a path to implicitly create directories.
+
+**What it does:**
+- "New Folder" button in the file explorer toolbar
+- Modal to name the folder → calls `POST /api/files/mkdir`
+- Immediately navigates into the new folder
+
+---
+
+### 3. ✏️ Rename Files & Folders
+**Who benefits:** All users
+**Why it matters:** The VFS has `rename()` but there's **no API route or UI**. Users must delete and re-upload to rename.
+
+**What it does:**
+- Right-click or inline-edit a file/folder name
+- Calls `POST /api/files/rename` with `{ oldPath, newPath }`
+- Instant UI update without full refresh
+
+---
+
+### 4. 📋 Move / Copy Files (Cut & Paste)
+**Who benefits:** All users
+**Why it matters:** VFS has `rename()` (move) and `copy()` but **no API or UI**. File organization is impossible.
+
+**What it does:**
+- Select files → "Cut" or "Copy" action in toolbar
+- Navigate to destination → "Paste" button appears
+- Calls `POST /api/files/move` or `POST /api/files/copy`
+- Supports multi-file operations
+
+---
+
+### 5. 🔍 Search / Filter Files
+**Who benefits:** All users
+**Why it matters:** No way to find files across directories. As storage grows, this becomes critical.
+
+**What it does:**
+- Search bar in the toolbar — filters current directory in real-time
+- Server-side recursive search (`GET /api/files/search?q=report&path=/uploads`)
+- Results show full path with click-to-navigate
+
+---
+
+## 🏅 Tier 2 — Core Platform Features
+
+### 6. 📊 Real Audit Log Viewer (Admin)
+**Who benefits:** Admin
+**Why it matters:** Audit logging infrastructure exists (`audit_logs` table, `logAudit()` method) but **no events are recorded and no UI exists** to view them.
+
+**What it does:**
+- Actually log events: login, upload, download, delete, share, user management
+- Admin Console → new "Audit Logs" tab
+- Filterable table: by user, action type, date range
+- Export audit logs as CSV
+
+---
+
+### 7. 📈 Real Storage Analytics Dashboard (Admin)
+**Who benefits:** Admin
+**Why it matters:** The `/metrics` endpoint returns **hardcoded zeros**. The admin dashboard shows a static "15%" progress bar.
+
+**What it does:**
+- Real disk usage tracking: total, used, available (from `os.statvfs` or `df`)
+- Upload/download byte counters (track in DB or memory)
+- Per-user storage usage breakdown
+- Storage trend chart (daily/weekly)
+- File type distribution pie chart (images, videos, docs, archives)
+
+---
+
+### 8. 🔔 Toast Notifications System
+**Who benefits:** All users
+**Why it matters:** All feedback currently uses `alert()` / `confirm()` / `prompt()` — blocking and ugly. This is a UX quality issue.
+
+**What it does:**
+- Replace all `alert()` calls with non-blocking toast notifications
+- Success (green), error (red), warning (yellow), info (blue) variants
+- Auto-dismiss with progress bar
+- Stack multiple notifications
+
+---
+
+### 9. 📤 Upload Progress Bar with Cancellation
+**Who benefits:** All users
+**Why it matters:** File uploads show no progress. Large files (up to 15GB configured) leave users guessing.
+
+**What it does:**
+- Real-time progress bar per file (using `XMLHttpRequest` or `fetch` with `ReadableStream`)
+- Overall progress for multi-file uploads
+- Cancel button per upload
+- Resume failed uploads (chunked upload protocol — types already exist: `UploadChunkSchema`, `UploadSessionSchema`)
+
+---
+
+### 10. 🏷️ Per-User Storage Quotas (Admin)
+**Who benefits:** Admin
+**Why it matters:** No way to limit how much storage a user consumes. One user could fill the disk.
+
+**What it does:**
+- Admin sets quota per user (e.g., 5GB)
+- Upload API checks quota before accepting
+- Dashboard shows each user's usage vs. quota
+- Warning when approaching limit (80%, 90%, 100%)
+
+---
+
+## 🥉 Tier 3 — Advanced Capabilities
+
+### 11. 🔐 Per-Folder Access Control (ACL)
+**Who benefits:** Admin
+**Why it matters:** The `access_levels` table and `AccessLevelSchema` exist but are **completely unimplemented**. Currently all authenticated users see everything.
+
+**What it does:**
+- Admin assigns permissions per folder per user/group: `read`, `write`, `delete`, `share`
+- VFS operations check ACLs before proceeding
+- UI hides/disables actions the user doesn't have permission for
+- Uses the existing `groups` table for group-based access
+
+---
+
+### 12. 👥 Group Management (Admin)
+**Who benefits:** Admin
+**Why it matters:** The `groups` and `user_groups` tables exist but are **unimplemented**. Groups are essential for ACL above.
+
+**What it does:**
+- Admin Console → "Groups" tab
+- Create/delete groups, add/remove users
+- Assign folder permissions to groups instead of individual users
+- Bulk user management
+
+---
+
+### 13. 🗑️ Trash / Recycle Bin
+**Who benefits:** All users
+**Why it matters:** Delete is permanent and immediate. Accidental deletion is a real data-loss risk.
+
+**What it does:**
+- Delete moves files to a `.trash/` virtual path instead of permanent removal
+- "Trash" sidebar item shows deleted files with restore/permanent-delete options
+- Auto-purge after configurable retention (e.g., 30 days)
+- Admin can empty all users' trash
+
+---
+
+### 14. 📱 Responsive Mobile Layout
+**Who benefits:** All users
+**Why it matters:** The current CSS layout assumes desktop. Mobile users get a poor experience.
+
+**What it does:**
+- Collapsible sidebar on mobile
+- Touch-friendly file grid with swipe actions
+- Bottom navigation bar on small screens
+- Upload via mobile camera/gallery
+
+---
+
+### 15. 🌙 Theme Toggle (Dark / Light / System)
+**Who benefits:** All users
+**Why it matters:** Currently hardcoded dark theme. Some users prefer light mode.
+
+**What it does:**
+- Toggle in navbar: Dark / Light / System preference
+- Persisted in localStorage
+- CSS variables already used — just swap the palette
+
+---
+
+
+### 16. 📝 Text File Editor (In-Browser)
+**Who benefits:** All users
+**Why it matters:** Currently you can preview text files but can't edit them. Useful for config files, notes, markdown.
+
+**What it does:**
+- Click text files → opens in a code editor (Monaco or CodeMirror)
+- Save button writes back via `PUT /api/files/content`
+- Syntax highlighting for common file types
+- Markdown preview mode
+
+---
+
+### 17. 🖼️ Image Thumbnail Generation
+**Who benefits:** All users
+**Why it matters:** Grid view shows emoji icons. Actual image thumbnails make the file browser much more useful.
+
+**What it does:**
+- Server generates thumbnails on upload (using `sharp`)
+- Grid view shows actual image previews
+- Lazy-loaded for performance
+- Cached in a `.thumbnails/` directory
+
+---
+
+---
+
+## 📊 Priority Matrix
+
+| Feature | Effort | Impact | Infra Ready? |
+|---|---|---|---|
+| Public Share Links | Medium | 🔥🔥🔥 | ✅ DB + Types exist |
+| Create Folder | Low | 🔥🔥🔥 | ✅ VFS has `mkdir` |
+| Rename Files | Low | 🔥🔥🔥 | ✅ VFS has `rename` |
+| Move / Copy | Low-Med | 🔥🔥🔥 | ✅ VFS has both |
+| Search | Medium | 🔥🔥🔥 | Partial |
+| Toast Notifications | Low | 🔥🔥 | None needed |
+| Audit Log Viewer | Medium | 🔥🔥 | ✅ DB + Core exist |
+| Upload Progress | Medium | 🔥🔥 | ✅ Chunk types exist |
+| Real Metrics | Medium | 🔥🔥 | Partial |
+| Per-Folder ACL | High | 🔥🔥 | ✅ DB + Types exist |
+| Trash / Recycle Bin | Medium | 🔥🔥 | None |
+| Group Management | Medium | 🔥 | ✅ DB exists |
+| Storage Quotas | Medium | 🔥 | None |
+| 2FA/MFA | High | 🔥 | ✅ Fields exist |
+| Theme Toggle | Low | 🔥 | ✅ CSS vars exist |
+| Mobile Layout | Medium | 🔥 | Partial |
+| Text Editor | Medium | 🔥 | None |
+| Image Thumbnails | Medium | 🔥 | None |
+
+> [!IMPORTANT]
+> **Recommended starting order:** Create Folder → Rename → Move/Copy → Toast Notifications → Share Links → Search → Audit Logs
+>
+> This order maximizes value while building on existing infrastructure. The first four are low-effort with massive usability improvements.
+
