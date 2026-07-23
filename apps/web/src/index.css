@@ -639,6 +639,65 @@ html, body {
   border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
+.admin-subtabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+
+.admin-subtabs .btn {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.audit-log-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+  transition: background 0.15s ease;
+}
+
+.audit-log-row:last-child {
+  border-bottom: none;
+}
+
+.audit-log-row:hover {
+  background: var(--bg-card-hover);
+}
+
+.audit-log-main {
+  min-width: 0;
+  flex: 1;
+  word-break: break-word;
+}
+
+.audit-log-action {
+  font-weight: 700;
+  color: var(--accent-indigo);
+  margin-right: 0.5rem;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.audit-log-resource {
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.audit-log-time {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 /* ponytail: standard flex/grid responsive architecture without heavy UI library overhead. Upgrade path: add touch-swipe gestures if mobile file drawer actions are needed. */
 
 .admin-user-row {
@@ -846,6 +905,12 @@ html, body {
     text-align: center;
     justify-content: center;
     min-height: 40px;
+    font-size: 0.75rem;
+    padding: 0.35rem 0.25rem;
+    white-space: normal;
+    word-break: break-word;
+    display: inline-flex;
+    align-items: center;
   }
 
   .navbar-right {
@@ -974,6 +1039,36 @@ html, body {
 
   .modal-card {
     padding: 1.25rem 1rem;
+  }
+
+  .admin-subtabs {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+  }
+
+  .admin-subtabs .btn {
+    white-space: normal;
+    text-align: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    padding: 0.5rem 0.25rem;
+  }
+
+  .audit-log-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
+    padding: 0.875rem 1rem;
+  }
+
+  .audit-log-main {
+    width: 100%;
+  }
+
+  .audit-log-time {
+    font-size: 0.7rem;
+    color: var(--text-muted);
   }
 }
 

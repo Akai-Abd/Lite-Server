@@ -290,6 +290,10 @@ export class Core {
     }))
   }
 
+  clearAuditLogs(): void {
+    this.db.prepare('DELETE FROM audit_logs').run()
+  }
+
   // ─── Trash Management ─────────────────────────────────────────────────────
 
   addTrashItem(item: { originalPath: string; trashPath: string; deletedBy: string }): any {

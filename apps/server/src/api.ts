@@ -625,6 +625,18 @@ export async function createApiServer(deps: ApiServerDependencies): Promise<Fast
     return { success: true, data: logs }
   })
 
+  server.delete('/api/audit', async (request: AuthenticatedRequest, reply) => {
+    if (!request.session) {
+      return reply.code(401).send({ success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } })
+    }
+    if (request.user?.role !== 'admin') {
+      return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Admin access required' } })
+    }
+    core.clearAuditLogs()
+    core.logAudit({ action: 'CLEAR_AUDIT_LOGS', userId: request.user.id, resource: 'Audit Logs' })
+    return { success: true }
+  })
+
   // ─── Share Routes ─────────────────────────────────────────────────────────
 
   server.post('/api/shares', async (request: AuthenticatedRequest, reply) => {

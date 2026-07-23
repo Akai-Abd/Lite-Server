@@ -368,6 +368,27 @@ function App() {
     }
   }
 
+  // Clear audit logs
+  const handleClearAuditLogs = async () => {
+    if (!window.confirm('Are you sure you want to clear all system audit logs?')) return
+    try {
+      const response = await fetch('/api/audit', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const result = await response.json()
+      if (response.ok && result.success) {
+        setAuditLogs([])
+        addToast('Audit logs cleared successfully', 'info')
+      } else {
+        addToast(result.error?.message || 'Failed to clear audit logs', 'error')
+      }
+    } catch (error) {
+      console.error('Clear audit logs error:', error)
+      addToast('Network error while clearing audit logs', 'error')
+    }
+  }
+
   // Load shares
   const loadShares = async (authToken: string = token) => {
     if (!authToken) return
@@ -1430,7 +1451,7 @@ function App() {
       {activeView === 'admin' && user?.role === 'admin' && (
         <div className="admin-grid">
           {/* Subtabs */}
-          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+          <div className="admin-subtabs">
             <button className={`btn ${adminTab === 'users' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setAdminTab('users')}>
               👥 User Management ({users.length})
             </button>
@@ -1600,7 +1621,15 @@ function App() {
               <div className="card-header-bar">
                 <div className="card-header-title">
                   <span>System Audit Logs</span>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', background: 'var(--bg-surface)', padding: '0.15rem 0.5rem', borderRadius: '9999px', border: '1px solid var(--border-color)' }}>
+                    {auditLogs.length} Logs
+                  </span>
                 </div>
+                {auditLogs.length > 0 && (
+                  <button onClick={handleClearAuditLogs} className="btn btn-danger" style={{ padding: '0.35rem 0.75rem', fontSize: '0.8125rem' }}>
+                    🗑️ Clear Logs
+                  </button>
+                )}
               </div>
               <div>
                 {auditLogs.length === 0 ? (
@@ -1608,14 +1637,14 @@ function App() {
                 ) : (
                   <div>
                     {auditLogs.map((log) => (
-                      <div key={log.id} className="file-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem' }}>
-                        <div>
-                          <span style={{ fontWeight: 700, color: 'var(--accent-indigo)', marginRight: '0.5rem', textTransform: 'uppercase', fontSize: '0.75rem' }}>
+                      <div key={log.id} className="audit-log-row">
+                        <div className="audit-log-main">
+                          <span className="audit-log-action">
                             [{log.action}]
                           </span>
-                          <span style={{ fontSize: '0.875rem', color: 'var(--text-primary)' }}>{log.resource || 'System'}</span>
+                          <span className="audit-log-resource">{log.resource || 'System'}</span>
                         </div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        <div className="audit-log-time">
                           {new Date(log.createdAt).toLocaleString()}
                         </div>
                       </div>
